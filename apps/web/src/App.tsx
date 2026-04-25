@@ -4,6 +4,7 @@
   Calculator,
   CalendarClock,
   Check,
+  ChevronDown,
   ClipboardList,
   Coffee,
   Copy as CopyIcon,
@@ -98,6 +99,8 @@ type BlendBreakdownRow = {
   mainDoughGrams: number;
 };
 
+type PanelKey = "settings" | "styles" | "planner" | "quality" | "cost" | "saved" | "journal";
+
 const BRAND_NAME = "Pizza Geek";
 const APP_VERSION = __APP_VERSION__;
 const BRAND_LOGO_SRC = `${import.meta.env.BASE_URL}favicon.svg`;
@@ -115,6 +118,16 @@ const DEFAULT_SETTINGS: AppSettings = {
   temperatureUnit: "F",
   sizeUnit: "in",
   theme: "dark"
+};
+
+const DEFAULT_PANEL_STATE: Record<PanelKey, boolean> = {
+  settings: false,
+  styles: false,
+  planner: false,
+  quality: false,
+  cost: false,
+  saved: false,
+  journal: false
 };
 
 const LOCALE_DEFAULTS = {
@@ -335,7 +348,11 @@ const copy = {
     saltBalance: "Salt balance",
     fermentPlan: "Ferment plan",
     flourStrength: "Flour strength",
-    mixTemperature: "Mix temperature"
+    mixTemperature: "Mix temperature",
+    advancedSchedule: "Detailed schedule",
+    sauceRecipeDetails: "Sauce recipe",
+    collapseSection: "Collapse section",
+    expandSection: "Expand section"
   },
   de: {
     brand: "Pizza Geek",
@@ -481,7 +498,11 @@ const copy = {
     saltBalance: "Salzbalance",
     fermentPlan: "Gareplan",
     flourStrength: "Mehlstarke",
-    mixTemperature: "Mischtemperatur"
+    mixTemperature: "Mischtemperatur",
+    advancedSchedule: "Detaillierter Zeitplan",
+    sauceRecipeDetails: "Saucenrezept",
+    collapseSection: "Bereich einklappen",
+    expandSection: "Bereich ausklappen"
   }
 } as const;
 
@@ -1499,6 +1520,9 @@ export function App() {
     return toLocalDateTimeInputValue(date);
   });
   const [copyMethodState, setCopyMethodState] = useState<"idle" | "copied" | "failed">("idle");
+  const [openPanels, setOpenPanels] = useState<Record<PanelKey, boolean>>(DEFAULT_PANEL_STATE);
+  const [showFermentationDetails, setShowFermentationDetails] = useState(false);
+  const [showSauceRecipe, setShowSauceRecipe] = useState(false);
   const [recipeName, setRecipeName] = useState(() =>
     getDefaultRecipeName(normalizeCalculatorInput(input).styleId, storedSettings.language === "de" ? "de" : "en")
   );
@@ -1577,6 +1601,24 @@ export function App() {
   const qualitySignals = useMemo(
     () => buildQualitySignals(result, normalizedInput, settings, t),
     [normalizedInput, result, settings, t]
+  );
+  const panelSummaries = useMemo(
+    () => ({
+      settings: `${settings.language === "de" ? t.german : t.english} · °${settings.temperatureUnit} · ${settings.sizeUnit === "in" ? t.inches : t.centimeters} · ${settings.theme === "dark" ? t.dark : t.light}`,
+      styles: `${activeStyle.name} · ${activeStyle.origin}`,
+      planner:
+        planMode === "ready-by"
+          ? `${t.readyBy}: ${formatDateTime(new Date(readyBy).toISOString(), settings.language)}`
+          : `${result.totalFermentationHours}h ${t.totalTime.toLowerCase()}`,
+      quality:
+        qualitySignals.length > 2
+          ? `${qualitySignals[0]?.label} · ${qualitySignals[1]?.label} +${qualitySignals.length - 2}`
+          : qualitySignals.map((signal) => signal.label).join(" · "),
+      cost: `${formatMoney(cost.perBall, cost.currency, settings.language)} · ${t.perDough.toLowerCase()}`,
+      saved: `${savedRecipes.length} ${t.savedCount}`,
+      journal: `${bakeLog.length} ${t.journalCount}`
+    }),
+    [activeStyle.name, activeStyle.origin, bakeLog.length, cost, planMode, qualitySignals, readyBy, result.totalFermentationHours, savedRecipes.length, settings, t]
   );
   const plan = useMemo<BakeStep[]>(() => {
     const anchor = planMode === "ready-by" ? new Date(readyBy) : new Date();
@@ -1736,6 +1778,13 @@ export function App() {
         }
       };
     });
+  };
+
+  const togglePanel = (key: PanelKey) => {
+    setOpenPanels((current) => ({
+      ...current,
+      [key]: !current[key]
+    }));
   };
 
   const updateTheme = (theme: ThemeMode) => {
@@ -2018,61 +2067,97 @@ export function App() {
       <div className="workspace">
         <div className="controlStack noPrint">
           <section className="panel">
-            <PanelTitle icon={<Globe size={18} />} label={t.settings} />
-            <div className="fieldGrid compact">
-              <SelectField
-                label={t.language}
-                value={settings.language}
-                onChange={(value) => updateLanguage(value as LocaleCode)}
-              >
-                <option value="en">{t.english}</option>
-                <option value="de">{t.german}</option>
-              </SelectField>
-              <SelectField label={t.theme} value={settings.theme} onChange={(value) => updateTheme(value as ThemeMode)}>
-                <option value="dark">{t.dark}</option>
-                <option value="light">{t.light}</option>
-              </SelectField>
-              <SelectField
-                label={t.temperatureUnit}
-                value={settings.temperatureUnit}
-                onChange={(value) =>
-                  setSettings((current) => ({
-                    ...DEFAULT_SETTINGS,
-                    ...current,
-                    temperatureUnit: value as TemperatureUnit
-                  }))
-                }
-              >
-                <option value="F">{t.fahrenheit}</option>
-                <option value="C">{t.celsius}</option>
-              </SelectField>
-              <SelectField
-                label={t.sizeUnit}
-                value={settings.sizeUnit}
-                onChange={(value) => updateSizeUnit(value as SizeUnit)}
-              >
-                <option value="in">{t.inches}</option>
-                <option value="cm">{t.centimeters}</option>
-              </SelectField>
-            </div>
+            <PanelTitle
+              icon={<Globe size={18} />}
+              label={t.settings}
+              summary={panelSummaries.settings}
+              collapsed={!openPanels.settings}
+              collapseAction={
+                <button
+                  className={`iconButton panelToggle ${openPanels.settings ? "open" : ""}`}
+                  type="button"
+                  aria-label={openPanels.settings ? t.collapseSection : t.expandSection}
+                  title={openPanels.settings ? t.collapseSection : t.expandSection}
+                  onClick={() => togglePanel("settings")}
+                >
+                  <ChevronDown size={16} />
+                </button>
+              }
+            />
+            {openPanels.settings ? (
+              <div className="fieldGrid compact">
+                <SelectField
+                  label={t.language}
+                  value={settings.language}
+                  onChange={(value) => updateLanguage(value as LocaleCode)}
+                >
+                  <option value="en">{t.english}</option>
+                  <option value="de">{t.german}</option>
+                </SelectField>
+                <SelectField label={t.theme} value={settings.theme} onChange={(value) => updateTheme(value as ThemeMode)}>
+                  <option value="dark">{t.dark}</option>
+                  <option value="light">{t.light}</option>
+                </SelectField>
+                <SelectField
+                  label={t.temperatureUnit}
+                  value={settings.temperatureUnit}
+                  onChange={(value) =>
+                    setSettings((current) => ({
+                      ...DEFAULT_SETTINGS,
+                      ...current,
+                      temperatureUnit: value as TemperatureUnit
+                    }))
+                  }
+                >
+                  <option value="F">{t.fahrenheit}</option>
+                  <option value="C">{t.celsius}</option>
+                </SelectField>
+                <SelectField
+                  label={t.sizeUnit}
+                  value={settings.sizeUnit}
+                  onChange={(value) => updateSizeUnit(value as SizeUnit)}
+                >
+                  <option value="in">{t.inches}</option>
+                  <option value="cm">{t.centimeters}</option>
+                </SelectField>
+              </div>
+            ) : null}
           </section>
 
           <section className="panel">
-            <PanelTitle icon={<BookOpen size={18} />} label={t.styles} />
-            <div className="styleGrid">
-              {PIZZA_STYLES.map((style) => (
+            <PanelTitle
+              icon={<BookOpen size={18} />}
+              label={t.styles}
+              summary={panelSummaries.styles}
+              collapsed={!openPanels.styles}
+              collapseAction={
                 <button
-                  className={style.id === normalizedInput.styleId ? "styleButton active" : "styleButton"}
-                  key={style.id}
+                  className={`iconButton panelToggle ${openPanels.styles ? "open" : ""}`}
                   type="button"
-                  onClick={() => onStyleChange(style.id)}
+                  aria-label={openPanels.styles ? t.collapseSection : t.expandSection}
+                  title={openPanels.styles ? t.collapseSection : t.expandSection}
+                  onClick={() => togglePanel("styles")}
                 >
-                  <strong>{style.name}</strong>
-                  <span>{style.flourType}</span>
-                  <small>{style.origin}</small>
+                  <ChevronDown size={16} />
                 </button>
-              ))}
-            </div>
+              }
+            />
+            {openPanels.styles ? (
+              <div className="styleGrid">
+                {PIZZA_STYLES.map((style) => (
+                  <button
+                    className={style.id === normalizedInput.styleId ? "styleButton active" : "styleButton"}
+                    key={style.id}
+                    type="button"
+                    onClick={() => onStyleChange(style.id)}
+                  >
+                    <strong>{style.name}</strong>
+                    <span>{style.flourType}</span>
+                    <small>{style.origin}</small>
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </section>
 
           <section className="panel">
@@ -2218,123 +2303,138 @@ export function App() {
                 </button>
               ))}
             </div>
-            <div className="fermentGrid">
-              <FermentationStageCard
-                {...getFermentationStageContent("bulk", settings.language)}
-                durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
-                temperatureLabel={t.roomTemp}
+            <div className="panelMetaRow">
+              <span className="sectionMeta">
+                {getPresetLabel(preset, settings.language)} · {result.totalFermentationHours}h {t.totalTime.toLowerCase()}
+              </span>
+              <button
+                className={`subtleDisclosure ${showFermentationDetails ? "open" : ""}`}
+                type="button"
+                onClick={() => setShowFermentationDetails((current) => !current)}
               >
-                <Field
-                  label={settings.language === "de" ? "Dauer" : "Hours"}
-                  value={normalizedInput.fermentation.roomTempHours}
-                  suffix="h"
-                  step={0.5}
-                  onChange={(value) => setFermentation({ roomTempHours: numberValue(value) })}
-                />
-                <Field
-                  label={t.roomTemp}
-                  value={displayTemperatureValue(normalizedInput.fermentation.roomTempF, settings.temperatureUnit)}
-                  suffix={`\u00B0${settings.temperatureUnit}`}
-                  onChange={(value) =>
-                    setFermentation({
-                      roomTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.roomTempF)
-                    })
-                  }
-                />
-              </FermentationStageCard>
-              <FermentationStageCard
-                {...getFermentationStageContent("temper", settings.language)}
-                durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
-                temperatureLabel={t.roomTemp}
-              >
-                <Field
-                  label={settings.language === "de" ? "Dauer" : "Hours"}
-                  value={normalizedInput.fermentation.finalRiseHours}
-                  suffix="h"
-                  step={0.5}
-                  onChange={(value) => setFermentation({ finalRiseHours: numberValue(value) })}
-                />
-                <Field
-                  label={t.roomTemp}
-                  value={displayTemperatureValue(normalizedInput.fermentation.roomTempF, settings.temperatureUnit)}
-                  suffix={`\u00B0${settings.temperatureUnit}`}
-                  onChange={(value) =>
-                    setFermentation({
-                      roomTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.roomTempF)
-                    })
-                  }
-                />
-              </FermentationStageCard>
-              <FermentationStageCard
-                {...getFermentationStageContent("cold-ball", settings.language)}
-                durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
-                temperatureLabel={t.fridgeTemp}
-              >
-                <Field
-                  label={settings.language === "de" ? "Dauer" : "Hours"}
-                  value={normalizedInput.fermentation.coldBallHours}
-                  suffix="h"
-                  step={0.5}
-                  onChange={(value) => setFermentation({ coldBallHours: numberValue(value) })}
-                />
-                <Field
-                  label={t.fridgeTemp}
-                  value={displayTemperatureValue(normalizedInput.fermentation.fridgeTempF, settings.temperatureUnit)}
-                  suffix={`\u00B0${settings.temperatureUnit}`}
-                  onChange={(value) =>
-                    setFermentation({
-                      fridgeTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.fridgeTempF)
-                    })
-                  }
-                />
-              </FermentationStageCard>
-              <FermentationStageCard
-                {...getFermentationStageContent("cold-bulk", settings.language)}
-                durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
-                temperatureLabel={t.fridgeTemp}
-              >
-                <Field
-                  label={settings.language === "de" ? "Dauer" : "Hours"}
-                  value={normalizedInput.fermentation.coldBulkHours}
-                  suffix="h"
-                  step={0.5}
-                  onChange={(value) => setFermentation({ coldBulkHours: numberValue(value) })}
-                />
-                <Field
-                  label={t.fridgeTemp}
-                  value={displayTemperatureValue(normalizedInput.fermentation.fridgeTempF, settings.temperatureUnit)}
-                  suffix={`\u00B0${settings.temperatureUnit}`}
-                  onChange={(value) =>
-                    setFermentation({
-                      fridgeTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.fridgeTempF)
-                    })
-                  }
-                />
-              </FermentationStageCard>
-              <FermentationStageCard
-                {...getFermentationStageContent("cellar", settings.language)}
-                durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
-                temperatureLabel={t.cellarTemp}
-              >
-                <Field
-                  label={settings.language === "de" ? "Dauer" : "Hours"}
-                  value={normalizedInput.fermentation.cellarTempHours}
-                  suffix="h"
-                  step={0.5}
-                  onChange={(value) => setFermentation({ cellarTempHours: numberValue(value) })}
-                />
-                <Field
-                  label={t.cellarTemp}
-                  value={displayTemperatureValue(normalizedInput.fermentation.cellarTempF, settings.temperatureUnit)}
-                  suffix={`\u00B0${settings.temperatureUnit}`}
-                  onChange={(value) =>
-                    setFermentation({
-                      cellarTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.cellarTempF)
-                    })
-                  }
-                />
-              </FermentationStageCard>
+                <span>{t.advancedSchedule}</span>
+                <ChevronDown size={16} />
+              </button>
             </div>
+            {showFermentationDetails ? (
+              <div className="fermentGrid">
+                <FermentationStageCard
+                  {...getFermentationStageContent("bulk", settings.language)}
+                  durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
+                  temperatureLabel={t.roomTemp}
+                >
+                  <Field
+                    label={settings.language === "de" ? "Dauer" : "Hours"}
+                    value={normalizedInput.fermentation.roomTempHours}
+                    suffix="h"
+                    step={0.5}
+                    onChange={(value) => setFermentation({ roomTempHours: numberValue(value) })}
+                  />
+                  <Field
+                    label={t.roomTemp}
+                    value={displayTemperatureValue(normalizedInput.fermentation.roomTempF, settings.temperatureUnit)}
+                    suffix={`\u00B0${settings.temperatureUnit}`}
+                    onChange={(value) =>
+                      setFermentation({
+                        roomTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.roomTempF)
+                      })
+                    }
+                  />
+                </FermentationStageCard>
+                <FermentationStageCard
+                  {...getFermentationStageContent("temper", settings.language)}
+                  durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
+                  temperatureLabel={t.roomTemp}
+                >
+                  <Field
+                    label={settings.language === "de" ? "Dauer" : "Hours"}
+                    value={normalizedInput.fermentation.finalRiseHours}
+                    suffix="h"
+                    step={0.5}
+                    onChange={(value) => setFermentation({ finalRiseHours: numberValue(value) })}
+                  />
+                  <Field
+                    label={t.roomTemp}
+                    value={displayTemperatureValue(normalizedInput.fermentation.roomTempF, settings.temperatureUnit)}
+                    suffix={`\u00B0${settings.temperatureUnit}`}
+                    onChange={(value) =>
+                      setFermentation({
+                        roomTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.roomTempF)
+                      })
+                    }
+                  />
+                </FermentationStageCard>
+                <FermentationStageCard
+                  {...getFermentationStageContent("cold-ball", settings.language)}
+                  durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
+                  temperatureLabel={t.fridgeTemp}
+                >
+                  <Field
+                    label={settings.language === "de" ? "Dauer" : "Hours"}
+                    value={normalizedInput.fermentation.coldBallHours}
+                    suffix="h"
+                    step={0.5}
+                    onChange={(value) => setFermentation({ coldBallHours: numberValue(value) })}
+                  />
+                  <Field
+                    label={t.fridgeTemp}
+                    value={displayTemperatureValue(normalizedInput.fermentation.fridgeTempF, settings.temperatureUnit)}
+                    suffix={`\u00B0${settings.temperatureUnit}`}
+                    onChange={(value) =>
+                      setFermentation({
+                        fridgeTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.fridgeTempF)
+                      })
+                    }
+                  />
+                </FermentationStageCard>
+                <FermentationStageCard
+                  {...getFermentationStageContent("cold-bulk", settings.language)}
+                  durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
+                  temperatureLabel={t.fridgeTemp}
+                >
+                  <Field
+                    label={settings.language === "de" ? "Dauer" : "Hours"}
+                    value={normalizedInput.fermentation.coldBulkHours}
+                    suffix="h"
+                    step={0.5}
+                    onChange={(value) => setFermentation({ coldBulkHours: numberValue(value) })}
+                  />
+                  <Field
+                    label={t.fridgeTemp}
+                    value={displayTemperatureValue(normalizedInput.fermentation.fridgeTempF, settings.temperatureUnit)}
+                    suffix={`\u00B0${settings.temperatureUnit}`}
+                    onChange={(value) =>
+                      setFermentation({
+                        fridgeTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.fridgeTempF)
+                      })
+                    }
+                  />
+                </FermentationStageCard>
+                <FermentationStageCard
+                  {...getFermentationStageContent("cellar", settings.language)}
+                  durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
+                  temperatureLabel={t.cellarTemp}
+                >
+                  <Field
+                    label={settings.language === "de" ? "Dauer" : "Hours"}
+                    value={normalizedInput.fermentation.cellarTempHours}
+                    suffix="h"
+                    step={0.5}
+                    onChange={(value) => setFermentation({ cellarTempHours: numberValue(value) })}
+                  />
+                  <Field
+                    label={t.cellarTemp}
+                    value={displayTemperatureValue(normalizedInput.fermentation.cellarTempF, settings.temperatureUnit)}
+                    suffix={`\u00B0${settings.temperatureUnit}`}
+                    onChange={(value) =>
+                      setFermentation({
+                        cellarTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.cellarTempF)
+                      })
+                    }
+                  />
+                </FermentationStageCard>
+              </div>
+            ) : null}
           </section>
 
           <section className="panel">
@@ -2506,55 +2606,72 @@ export function App() {
                       ))}
                     </div>
                     {localizedSelectedSauceOption ? (
-                      <div className="sauceDetailCard">
-                        <div className="sauceDetailHeader">
-                          <div>
-                            <strong>{localizedSelectedSauceOption.name}</strong>
-                            {localizedSelectedSauceOption.description ? <span>{localizedSelectedSauceOption.description}</span> : null}
-                          </div>
-                          <div className="sauceMeta">
-                            {localizedSelectedSauceOption.source ? (
-                              <span>
-                                {sauceUi.source}: {localizedSelectedSauceOption.source}
-                              </span>
-                            ) : null}
-                            {localizedSelectedSauceOption.yield ? (
-                              <span>
-                                {sauceUi.yield}: {localizedSelectedSauceOption.yield}
-                              </span>
-                            ) : null}
-                          </div>
+                      <>
+                        <div className="panelMetaRow">
+                          <span className="sectionMeta">
+                            {localizedSelectedSauceOption.name} · {normalizedInput.sauce.gramsPerPizza}g / {settings.language === "de" ? "Pizza" : "pizza"}
+                          </span>
+                          <button
+                            className={`subtleDisclosure ${showSauceRecipe ? "open" : ""}`}
+                            type="button"
+                            onClick={() => setShowSauceRecipe((current) => !current)}
+                          >
+                            <span>{t.sauceRecipeDetails}</span>
+                            <ChevronDown size={16} />
+                          </button>
                         </div>
-                        <div className="sauceDetailGrid">
-                          <div className="sauceDetailBlock">
-                            <h4>{sauceUi.ingredients}</h4>
-                            <ul className="detailList">
-                              {localizedSelectedSauceOption.ingredients.map((ingredient) => (
-                                <li key={`${localizedSelectedSauceOption.id}-${ingredient.item}`}>
-                                  <strong>{ingredient.item}</strong>
+                        {showSauceRecipe ? (
+                          <div className="sauceDetailCard">
+                            <div className="sauceDetailHeader">
+                              <div>
+                                <strong>{localizedSelectedSauceOption.name}</strong>
+                                {localizedSelectedSauceOption.description ? <span>{localizedSelectedSauceOption.description}</span> : null}
+                              </div>
+                              <div className="sauceMeta">
+                                {localizedSelectedSauceOption.source ? (
                                   <span>
-                                    {ingredient.amount}
-                                    {ingredient.note ? ` - ${ingredient.note}` : ""}
+                                    {sauceUi.source}: {localizedSelectedSauceOption.source}
                                   </span>
-                                </li>
-                              ))}
-                            </ul>
+                                ) : null}
+                                {localizedSelectedSauceOption.yield ? (
+                                  <span>
+                                    {sauceUi.yield}: {localizedSelectedSauceOption.yield}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="sauceDetailGrid">
+                              <div className="sauceDetailBlock">
+                                <h4>{sauceUi.ingredients}</h4>
+                                <ul className="detailList">
+                                  {localizedSelectedSauceOption.ingredients.map((ingredient) => (
+                                    <li key={`${localizedSelectedSauceOption.id}-${ingredient.item}`}>
+                                      <strong>{ingredient.item}</strong>
+                                      <span>
+                                        {ingredient.amount}
+                                        {ingredient.note ? ` - ${ingredient.note}` : ""}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                              <div className="sauceDetailBlock">
+                                <h4>{sauceUi.instructions}</h4>
+                                <ol className="detailList ordered">
+                                  {localizedSelectedSauceOption.instructions.map((instruction) => (
+                                    <li key={`${localizedSelectedSauceOption.id}-${instruction}`}>{instruction}</li>
+                                  ))}
+                                </ol>
+                              </div>
+                            </div>
+                            {localizedSelectedSauceOption.proTip ? (
+                              <Notice tone="ok">
+                                <strong>{sauceUi.proTip}:</strong> {localizedSelectedSauceOption.proTip}
+                              </Notice>
+                            ) : null}
                           </div>
-                          <div className="sauceDetailBlock">
-                            <h4>{sauceUi.instructions}</h4>
-                            <ol className="detailList ordered">
-                              {localizedSelectedSauceOption.instructions.map((instruction) => (
-                                <li key={`${localizedSelectedSauceOption.id}-${instruction}`}>{instruction}</li>
-                              ))}
-                            </ol>
-                          </div>
-                        </div>
-                        {localizedSelectedSauceOption.proTip ? (
-                          <Notice tone="ok">
-                            <strong>{sauceUi.proTip}:</strong> {localizedSelectedSauceOption.proTip}
-                          </Notice>
                         ) : null}
-                      </div>
+                      </>
                     ) : null}
                   </>
                 ) : null}
@@ -2697,30 +2814,50 @@ export function App() {
           </section>
 
           <section className="panel">
-            <PanelTitle icon={<CalendarClock size={18} />} label={t.planner} />
-            <Segmented
-              value={planMode}
-              options={[
-                { value: "starting-now", label: t.today },
-                { value: "ready-by", label: t.readyBy }
-              ]}
-              onChange={(value) => setPlanMode(value)}
+            <PanelTitle
+              icon={<CalendarClock size={18} />}
+              label={t.planner}
+              summary={panelSummaries.planner}
+              collapsed={!openPanels.planner}
+              collapseAction={
+                <button
+                  className={`iconButton panelToggle ${openPanels.planner ? "open" : ""}`}
+                  type="button"
+                  aria-label={openPanels.planner ? t.collapseSection : t.expandSection}
+                  title={openPanels.planner ? t.collapseSection : t.expandSection}
+                  onClick={() => togglePanel("planner")}
+                >
+                  <ChevronDown size={16} />
+                </button>
+              }
             />
-            {planMode === "ready-by" ? (
-              <label className="field single">
-                <span>{t.readyDate}</span>
-                <input type="datetime-local" value={readyBy} onChange={(event) => setReadyBy(event.target.value)} />
-              </label>
+            {openPanels.planner ? (
+              <>
+                <Segmented
+                  value={planMode}
+                  options={[
+                    { value: "starting-now", label: t.today },
+                    { value: "ready-by", label: t.readyBy }
+                  ]}
+                  onChange={(value) => setPlanMode(value)}
+                />
+                {planMode === "ready-by" ? (
+                  <label className="field single">
+                    <span>{t.readyDate}</span>
+                    <input type="datetime-local" value={readyBy} onChange={(event) => setReadyBy(event.target.value)} />
+                  </label>
+                ) : null}
+                <ol className="timeline">
+                  {localizedPlan.map((step) => (
+                    <li key={`${step.label}-${step.time.toISOString()}`}>
+                      <time>{formatDateTime(step.time.toISOString(), settings.language)}</time>
+                      <strong>{step.label}</strong>
+                      <span>{step.description}</span>
+                    </li>
+                  ))}
+                </ol>
+              </>
             ) : null}
-            <ol className="timeline">
-              {localizedPlan.map((step) => (
-                <li key={`${step.label}-${step.time.toISOString()}`}>
-                  <time>{formatDateTime(step.time.toISOString(), settings.language)}</time>
-                  <strong>{step.label}</strong>
-                  <span>{step.description}</span>
-                </li>
-              ))}
-            </ol>
           </section>
         </div>
 
@@ -2863,12 +3000,30 @@ export function App() {
           </section>
 
           <section className="panel printHide">
-            <PanelTitle icon={<Gauge size={18} />} label={t.recipeHealth} />
-            <div className="signalList">
-              {qualitySignals.map((signal) => (
-                <SignalRow key={signal.label} signal={signal} />
-              ))}
-            </div>
+            <PanelTitle
+              icon={<Gauge size={18} />}
+              label={t.recipeHealth}
+              summary={panelSummaries.quality}
+              collapsed={!openPanels.quality}
+              collapseAction={
+                <button
+                  className={`iconButton panelToggle ${openPanels.quality ? "open" : ""}`}
+                  type="button"
+                  aria-label={openPanels.quality ? t.collapseSection : t.expandSection}
+                  title={openPanels.quality ? t.collapseSection : t.expandSection}
+                  onClick={() => togglePanel("quality")}
+                >
+                  <ChevronDown size={16} />
+                </button>
+              }
+            />
+            {openPanels.quality ? (
+              <div className="signalList">
+                {qualitySignals.map((signal) => (
+                  <SignalRow key={signal.label} signal={signal} />
+                ))}
+              </div>
+            ) : null}
           </section>
 
           <section className="panel">
@@ -2932,135 +3087,195 @@ export function App() {
           </section>
 
           <section className="panel noPrint">
-            <PanelTitle icon={<Calculator size={18} />} label={t.cost} />
-            <div className="fieldGrid">
-              <Field
-                label={t.flourCost}
-                value={resolvedCostSettings.flourPerKg}
-                step={0.1}
-                onChange={(value) => setCostSettings((current) => ({ ...current, flourPerKg: numberValue(value) }))}
-              />
-              <Field
-                label={t.yeastCost}
-                value={resolvedCostSettings.yeastPerKg}
-                step={0.1}
-                onChange={(value) => setCostSettings((current) => ({ ...current, yeastPerKg: numberValue(value) }))}
-              />
-              <Field
-                label={t.oilCost}
-                value={resolvedCostSettings.oilPerKg}
-                step={0.1}
-                onChange={(value) => setCostSettings((current) => ({ ...current, oilPerKg: numberValue(value) }))}
-              />
-              <SelectField
-                label={t.currency}
-                value={resolvedCostSettings.currency}
-                onChange={(value) => setCostSettings((current) => ({ ...current, currency: value }))}
-              >
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
-                <option value="GBP">GBP</option>
-                <option value="CAD">CAD</option>
-              </SelectField>
-            </div>
-            <div className="costTotal">
-              <span>{t.batch}</span>
-              <strong>{formatMoney(cost.total, cost.currency, settings.language)}</strong>
-              <span>{t.perDough}</span>
-              <strong>{formatMoney(cost.perBall, cost.currency, settings.language)}</strong>
-            </div>
-          </section>
-
-          <section className="panel noPrint">
-            <PanelTitle icon={<Save size={18} />} label={t.savedRecipes} />
-            <div className="saveRow">
-              <input value={recipeName} onChange={(event) => setRecipeName(event.target.value)} placeholder={t.recipeName} />
-              <button className="actionButton" type="button" onClick={saveRecipe}>
-                <Save size={16} />
-                {t.save}
-              </button>
-            </div>
-            <p className="sectionMeta">
-              {savedRecipes.length} {t.savedCount}
-            </p>
-            <div className="savedList scrollArea">
-              {savedRecipes.map((recipe) => (
-                <button className="savedItem" key={recipe.id} type="button" onClick={() => loadSavedRecipe(recipe)}>
-                  <strong>{recipe.name}</strong>
-                  <span>{formatDateTime(recipe.createdAt, settings.language)}</span>
-                </button>
-              ))}
-            </div>
-          </section>
-
-          <section className="panel noPrint">
-            <PanelTitle icon={<ClipboardList size={18} />} label={t.bakeJournal} />
-            <div className="fieldGrid compact">
-              <Field
-                label={t.rating}
-                value={logDraft.rating}
-                min={1}
-                max={5}
-                onChange={(value) => setLogDraft((current) => ({ ...current, rating: numberValue(value, 5) }))}
-              />
-              <SelectField
-                label={t.outcome}
-                value={logDraft.outcome}
-                onChange={(value) => setLogDraft((current) => ({ ...current, outcome: value as BakeLogEntry["outcome"] }))}
-              >
-                <option value="keeper">{t.keeper}</option>
-                <option value="tweak">{t.tweak}</option>
-                <option value="fail">{t.fail}</option>
-              </SelectField>
-            </div>
-            <div className="photoRow">
-              <label className="ghostButton fileButton">
-                <input type="file" accept="image/*" onChange={onBakePhotoChange} />
-                {t.addPhoto}
-              </label>
-              {logDraft.photoDataUrl ? (
+            <PanelTitle
+              icon={<Calculator size={18} />}
+              label={t.cost}
+              summary={panelSummaries.cost}
+              collapsed={!openPanels.cost}
+              collapseAction={
                 <button
-                  className="ghostButton"
+                  className={`iconButton panelToggle ${openPanels.cost ? "open" : ""}`}
                   type="button"
-                  onClick={() => setLogDraft((current) => ({ ...current, photoDataUrl: undefined, photoName: undefined }))}
+                  aria-label={openPanels.cost ? t.collapseSection : t.expandSection}
+                  title={openPanels.cost ? t.collapseSection : t.expandSection}
+                  onClick={() => togglePanel("cost")}
                 >
-                  {t.removePhoto}
+                  <ChevronDown size={16} />
                 </button>
-              ) : null}
-            </div>
-            {logDraft.photoDataUrl ? (
-              <div className="photoPreview">
-                <img src={logDraft.photoDataUrl} alt={logDraft.photoName ?? "Bake preview"} />
-                <span>{logDraft.photoName}</span>
-              </div>
-            ) : (
-              <p className="sectionMeta">{t.noPhoto}</p>
-            )}
-            <textarea
-              value={logDraft.notes}
-              onChange={(event) => setLogDraft((current) => ({ ...current, notes: event.target.value }))}
-              placeholder={t.notesPlaceholder}
+              }
             />
-            <button className="actionButton fullWidth" type="button" onClick={addBakeLog}>
-              {t.logBake}
-            </button>
-            <p className="sectionMeta">
-              {bakeLog.length} {t.journalCount}
-            </p>
-            <div className="savedList scrollArea">
-              {bakeLog.map((entry) => (
-                <div className="savedItem staticItem" key={entry.id}>
-                  <strong>{entry.recipeName}</strong>
-                  <span>
-                    {entry.rating}/5, {t[entry.outcome]}, {formatDateTime(entry.date, settings.language)}
-                  </span>
-                  {entry.photoDataUrl ? (
-                    <img className="journalImage" src={entry.photoDataUrl} alt={entry.photoName ?? entry.recipeName} />
-                  ) : null}
-                  {entry.notes ? <p>{entry.notes}</p> : null}
+            {openPanels.cost ? (
+              <>
+                <div className="fieldGrid">
+                  <Field
+                    label={t.flourCost}
+                    value={resolvedCostSettings.flourPerKg}
+                    step={0.1}
+                    onChange={(value) => setCostSettings((current) => ({ ...current, flourPerKg: numberValue(value) }))}
+                  />
+                  <Field
+                    label={t.yeastCost}
+                    value={resolvedCostSettings.yeastPerKg}
+                    step={0.1}
+                    onChange={(value) => setCostSettings((current) => ({ ...current, yeastPerKg: numberValue(value) }))}
+                  />
+                  <Field
+                    label={t.oilCost}
+                    value={resolvedCostSettings.oilPerKg}
+                    step={0.1}
+                    onChange={(value) => setCostSettings((current) => ({ ...current, oilPerKg: numberValue(value) }))}
+                  />
+                  <SelectField
+                    label={t.currency}
+                    value={resolvedCostSettings.currency}
+                    onChange={(value) => setCostSettings((current) => ({ ...current, currency: value }))}
+                  >
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="GBP">GBP</option>
+                    <option value="CAD">CAD</option>
+                  </SelectField>
                 </div>
-              ))}
-            </div>
+                <div className="costTotal">
+                  <span>{t.batch}</span>
+                  <strong>{formatMoney(cost.total, cost.currency, settings.language)}</strong>
+                  <span>{t.perDough}</span>
+                  <strong>{formatMoney(cost.perBall, cost.currency, settings.language)}</strong>
+                </div>
+              </>
+            ) : null}
+          </section>
+
+          <section className="panel noPrint">
+            <PanelTitle
+              icon={<Save size={18} />}
+              label={t.savedRecipes}
+              summary={panelSummaries.saved}
+              collapsed={!openPanels.saved}
+              collapseAction={
+                <button
+                  className={`iconButton panelToggle ${openPanels.saved ? "open" : ""}`}
+                  type="button"
+                  aria-label={openPanels.saved ? t.collapseSection : t.expandSection}
+                  title={openPanels.saved ? t.collapseSection : t.expandSection}
+                  onClick={() => togglePanel("saved")}
+                >
+                  <ChevronDown size={16} />
+                </button>
+              }
+            />
+            {openPanels.saved ? (
+              <>
+                <div className="saveRow">
+                  <input value={recipeName} onChange={(event) => setRecipeName(event.target.value)} placeholder={t.recipeName} />
+                  <button className="actionButton" type="button" onClick={saveRecipe}>
+                    <Save size={16} />
+                    {t.save}
+                  </button>
+                </div>
+                <p className="sectionMeta">
+                  {savedRecipes.length} {t.savedCount}
+                </p>
+                <div className="savedList scrollArea">
+                  {savedRecipes.map((recipe) => (
+                    <button className="savedItem" key={recipe.id} type="button" onClick={() => loadSavedRecipe(recipe)}>
+                      <strong>{recipe.name}</strong>
+                      <span>{formatDateTime(recipe.createdAt, settings.language)}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
+          </section>
+
+          <section className="panel noPrint">
+            <PanelTitle
+              icon={<ClipboardList size={18} />}
+              label={t.bakeJournal}
+              summary={panelSummaries.journal}
+              collapsed={!openPanels.journal}
+              collapseAction={
+                <button
+                  className={`iconButton panelToggle ${openPanels.journal ? "open" : ""}`}
+                  type="button"
+                  aria-label={openPanels.journal ? t.collapseSection : t.expandSection}
+                  title={openPanels.journal ? t.collapseSection : t.expandSection}
+                  onClick={() => togglePanel("journal")}
+                >
+                  <ChevronDown size={16} />
+                </button>
+              }
+            />
+            {openPanels.journal ? (
+              <>
+                <div className="fieldGrid compact">
+                  <Field
+                    label={t.rating}
+                    value={logDraft.rating}
+                    min={1}
+                    max={5}
+                    onChange={(value) => setLogDraft((current) => ({ ...current, rating: numberValue(value, 5) }))}
+                  />
+                  <SelectField
+                    label={t.outcome}
+                    value={logDraft.outcome}
+                    onChange={(value) => setLogDraft((current) => ({ ...current, outcome: value as BakeLogEntry["outcome"] }))}
+                  >
+                    <option value="keeper">{t.keeper}</option>
+                    <option value="tweak">{t.tweak}</option>
+                    <option value="fail">{t.fail}</option>
+                  </SelectField>
+                </div>
+                <div className="photoRow">
+                  <label className="ghostButton fileButton">
+                    <input type="file" accept="image/*" onChange={onBakePhotoChange} />
+                    {t.addPhoto}
+                  </label>
+                  {logDraft.photoDataUrl ? (
+                    <button
+                      className="ghostButton"
+                      type="button"
+                      onClick={() => setLogDraft((current) => ({ ...current, photoDataUrl: undefined, photoName: undefined }))}
+                    >
+                      {t.removePhoto}
+                    </button>
+                  ) : null}
+                </div>
+                {logDraft.photoDataUrl ? (
+                  <div className="photoPreview">
+                    <img src={logDraft.photoDataUrl} alt={logDraft.photoName ?? "Bake preview"} />
+                    <span>{logDraft.photoName}</span>
+                  </div>
+                ) : (
+                  <p className="sectionMeta">{t.noPhoto}</p>
+                )}
+                <textarea
+                  value={logDraft.notes}
+                  onChange={(event) => setLogDraft((current) => ({ ...current, notes: event.target.value }))}
+                  placeholder={t.notesPlaceholder}
+                />
+                <button className="actionButton fullWidth" type="button" onClick={addBakeLog}>
+                  {t.logBake}
+                </button>
+                <p className="sectionMeta">
+                  {bakeLog.length} {t.journalCount}
+                </p>
+                <div className="savedList scrollArea">
+                  {bakeLog.map((entry) => (
+                    <div className="savedItem staticItem" key={entry.id}>
+                      <strong>{entry.recipeName}</strong>
+                      <span>
+                        {entry.rating}/5, {t[entry.outcome]}, {formatDateTime(entry.date, settings.language)}
+                      </span>
+                      {entry.photoDataUrl ? (
+                        <img className="journalImage" src={entry.photoDataUrl} alt={entry.photoName ?? entry.recipeName} />
+                      ) : null}
+                      {entry.notes ? <p>{entry.notes}</p> : null}
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : null}
           </section>
         </aside>
       </div>
@@ -3319,14 +3534,36 @@ export function App() {
   );
 }
 
-function PanelTitle({ icon, label, action }: { icon: ReactNode; label: string; action?: ReactNode }) {
+function PanelTitle({
+  icon,
+  label,
+  summary,
+  action,
+  collapseAction,
+  collapsed
+}: {
+  icon: ReactNode;
+  label: string;
+  summary?: string;
+  action?: ReactNode;
+  collapseAction?: ReactNode;
+  collapsed?: boolean;
+}) {
   return (
-    <div className="panelTitle">
-      <span>
-        {icon}
-        {label}
-      </span>
-      {action ? <div className="panelAction noPrint">{action}</div> : null}
+    <div className={`panelTitle ${collapsed ? "collapsed" : ""}`}>
+      <div className="panelTitleText">
+        <span>
+          {icon}
+          {label}
+        </span>
+        {summary ? <p className="panelSummary">{summary}</p> : null}
+      </div>
+      {action || collapseAction ? (
+        <div className="panelActionRow noPrint">
+          {action ? <div className="panelAction">{action}</div> : null}
+          {collapseAction ? <div className="panelAction">{collapseAction}</div> : null}
+        </div>
+      ) : null}
     </div>
   );
 }

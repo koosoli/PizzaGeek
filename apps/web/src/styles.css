@@ -320,13 +320,23 @@ h3 {
 
 .panelTitle {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 16px;
 }
 
-.panelTitle span {
+.panelTitle.collapsed {
+  margin-bottom: 0;
+}
+
+.panelTitleText {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.panelTitleText > span {
   display: inline-flex;
   align-items: center;
   gap: 9px;
@@ -335,12 +345,26 @@ h3 {
   font-weight: 800;
 }
 
+.panelSummary {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.panelActionRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .panelAction {
   display: inline-flex;
   align-items: center;
 }
 
-.panelTitle svg {
+.panelTitleText svg {
   color: var(--accent);
 }
 
@@ -471,6 +495,15 @@ h3 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  margin-top: 12px;
+}
+
+.panelMetaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
   margin-top: 12px;
 }
 
@@ -607,6 +640,40 @@ textarea {
 .iconButton {
   width: 42px;
   padding: 0;
+}
+
+.panelToggle {
+  flex: 0 0 auto;
+}
+
+.panelToggle svg {
+  color: var(--accent);
+}
+
+.panelToggle svg,
+.subtleDisclosure svg {
+  transition: transform 140ms ease;
+}
+
+.panelToggle.open svg,
+.subtleDisclosure.open svg {
+  transform: rotate(180deg);
+}
+
+.subtleDisclosure {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.subtleDisclosure:hover {
+  color: #cf6a38;
 }
 
 .alignEnd {
