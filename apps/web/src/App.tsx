@@ -1,0 +1,3228 @@
+﻿import {
+  AlertCircle,
+  BookOpen,
+  Calculator,
+  CalendarClock,
+  Check,
+  ClipboardList,
+  Copy as CopyIcon,
+  Download,
+  Flame,
+  FlaskConical,
+  Gauge,
+  Globe,
+  Printer,
+  RotateCcw,
+  Save,
+  Settings2,
+  Share2,
+  Wheat
+} from "lucide-react";
+import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
+import {
+  buildBakePlan,
+  calculateCost,
+  calculateDough,
+  choosePresetForStyle,
+  createDefaultInput,
+  defaultCostSettings,
+  estimatePanBallWeight,
+  FERMENTATION_PRESETS,
+  FLOURS,
+  PIZZA_STYLES,
+  SAUCE_SALT_WARNING,
+  fahrenheitToCelsius,
+  getSauceCollectionForStyle,
+  getSauceOption,
+  getStyleById,
+  scheduleFromPreset,
+  type BakeStep,
+  type CalculatorInput,
+  type CostSettings,
+  type DoughResult,
+  type FermentationPresetKey,
+  type FlourBlendItem,
+  type OvenType,
+  type SauceRecipeOption,
+  type SizeUnit,
+  type TemperatureUnit,
+  type YeastType
+} from "@pizza-geek/core";
+import { Field, Segmented, SelectField, Toggle } from "./components/Controls";
+import { usePersistentState } from "./hooks/usePersistentState";
+
+type LocaleCode = "en" | "de";
+type ThemeMode = "dark" | "light";
+type PrefermentMode = "none" | "poolish" | "biga" | "tiga" | "bassinage";
+
+type AppSettings = {
+  language: LocaleCode;
+  temperatureUnit: TemperatureUnit;
+  sizeUnit: SizeUnit;
+  theme: ThemeMode;
+};
+
+type SavedRecipe = {
+  id: string;
+  name: string;
+  createdAt: string;
+  input: CalculatorInput;
+};
+
+type BakeLogEntry = {
+  id: string;
+  date: string;
+  recipeName: string;
+  rating: number;
+  outcome: "keeper" | "tweak" | "fail";
+  notes: string;
+  photoDataUrl?: string;
+  photoName?: string;
+};
+
+type QualitySignal = {
+  label: string;
+  value: string;
+  score: number;
+  tone: "ok" | "notice" | "warning" | "danger";
+  note: string;
+};
+
+type BlendBreakdownRow = {
+  flourId: string;
+  percentage: number;
+  flourLabel: string;
+  totalGrams: number;
+  prefermentGrams: number;
+  mainDoughGrams: number;
+};
+
+const BRAND_NAME = "Pizza Geek";
+const APP_VERSION = __APP_VERSION__;
+const BRAND_LOGO_SRC = `${import.meta.env.BASE_URL}favicon.svg`;
+const STORAGE_KEYS = {
+  settings: "pizza-geek.settings",
+  input: "pizza-geek.input",
+  costs: "pizza-geek.costs",
+  saved: "pizza-geek.saved",
+  bakeLog: "pizza-geek.bake-log"
+} as const;
+
+const DEFAULT_SETTINGS: AppSettings = {
+  language: "en",
+  temperatureUnit: "F",
+  sizeUnit: "in",
+  theme: "dark"
+};
+
+const copy = {
+  en: {
+    brand: "Pizza Geek",
+    title: "Dough Calculator",
+    subtitle:
+      "Style-aware dough math for serious home and pro pizza making, with clearer planning, better bake guidance, and a much stronger recipe workflow.",
+    resetStyle: "Reset style",
+    printRecipe: "Print sheet",
+    settings: "Settings",
+    theme: "Theme",
+    language: "Language",
+    temperatureUnit: "Temperature",
+    sizeUnit: "Length unit",
+    english: "English",
+    german: "Deutsch",
+    dark: "Dark",
+    light: "Light",
+    fahrenheit: "Fahrenheit",
+    celsius: "Celsius",
+    styles: "Styles",
+    doughSetup: "Dough Setup",
+    fermentation: "Fermentation",
+    doughStudio: "Preferment & Flour",
+    bakeSurface: "Shape & Bake",
+    ovenProfile: "Oven Profile",
+    planner: "Plan Ahead",
+    formula: "Recipe Sheet",
+    recipeHealth: "Quality Readout",
+    guidance: "Bake Guidance",
+    method: "Method",
+    cost: "Costing",
+    savedRecipes: "Recipe Library",
+    bakeJournal: "Bake Journal",
+    doughBalls: "Dough balls",
+    ballWeight: "Ball weight",
+    hydration: "Hydration",
+    salt: "Salt",
+    oil: "Oil",
+    sugar: "Sugar",
+    honey: "Honey",
+    malt: "Malt",
+    lard: "Lard",
+    milkPowder: "Milk powder",
+    yeastType: "Yeast",
+    mixerType: "Mixer",
+    manualYeast: "Manual yeast",
+    flourTemp: "Flour temp",
+    roomBulk: "Room bulk",
+    cellarTime: "Cellar",
+    coldBulk: "Fridge bulk",
+    coldBall: "Fridge ball",
+    finalRise: "Final rise",
+    roomTemp: "Room temp",
+    cellarTemp: "Cellar temp",
+    fridgeTemp: "Fridge temp",
+    prefermentMode: "Preferment style",
+    none: "None",
+    poolish: "Poolish",
+    biga: "Biga",
+    tiga: "Tiga",
+    bassinage: "Bassinage",
+    prefermentFlour: "Preferment flour",
+    bigaHydration: "Biga hydration",
+    prefermentRoom: "Preferment room",
+    prefermentCold: "Preferment cold",
+    flourBlend: "Flour blend",
+    addFlour: "Add flour",
+    blendTotal: "Blend total",
+    totalLabel: "total",
+    panGeometry: "Pan geometry",
+    quickWeights: "Quick size weights",
+    sizeHint: "Tap a diameter to apply a typical dough-ball weight for this style.",
+    shape: "Shape",
+    unit: "Unit",
+    rectangular: "Rectangular",
+    round: "Round",
+    inches: "Inches",
+    centimeters: "Centimeters",
+    length: "Length",
+    width: "Width",
+    diameter: "Diameter",
+    depth: "Depth",
+    applyPanWeight: "Apply pan weight",
+    stoneTemp: "Stone temp",
+    topHeat: "Top heat",
+    deckTemp: "Deck temp",
+    broilerFinish: "Broiler finish",
+    finishingBroil: "Finishing broil",
+    sauce: "Sauce",
+    sauceStyle: "Sauce style",
+    sauceWeight: "Sauce / pizza",
+    sauceHint: "Adds sauce guidance to the recipe sheet and method.",
+    sauceClassic: "Classic tomato",
+    sauceRaw: "Raw tomato",
+    sauceCooked: "Cooked tomato",
+    sauceWhite: "White sauce",
+    today: "Starting now",
+    readyBy: "Ready by",
+    readyDate: "Ready date",
+    flour: "Flour",
+    water: "Water",
+    yeast: "Yeast",
+    bake: "Bake",
+    effectiveFerment: "Effective ferment",
+    totalTime: "Total time",
+    waterTemp: "Water temp",
+    targetFdt: "Target FDT",
+    bakeTime: "Bake time",
+    prefermentSplit: "Preferment split",
+    mainDough: "Main dough",
+    inPreferment: "in preferment",
+    mainDoughAdditions: "Main dough additions",
+    additionalFlour: "additional flour",
+    additionalWater: "additional water",
+    additionalYeast: "additional yeast",
+    batch: "Batch",
+    perDough: "Per dough",
+    recipeName: "Recipe name",
+    save: "Save",
+    print: "Print",
+    export: "Export",
+    copy: "Copy",
+    addPhoto: "Add photo",
+    removePhoto: "Remove photo",
+    rating: "Rating",
+    outcome: "Outcome",
+    notes: "Notes",
+    notesPlaceholder:
+      "What happened during the bake? Crumb, color, shaping, oven behavior, next adjustment...",
+    logBake: "Log bake",
+    keeper: "Keeper",
+    tweak: "Tweak",
+    fail: "Fail",
+    savedCount: "saved recipes",
+    journalCount: "journal entries",
+    noPhoto: "No photo yet",
+    flourCost: "Flour / kg",
+    yeastCost: "Yeast / kg",
+    oilCost: "Oil / kg",
+    currency: "Currency",
+    hydrationFit: "Hydration fit",
+    saltBalance: "Salt balance",
+    fermentPlan: "Ferment plan",
+    flourStrength: "Flour strength",
+    mixTemperature: "Mix temperature"
+  },
+  de: {
+    brand: "Pizza Geek",
+    title: "Teigrechner",
+    subtitle:
+      "Stilbewusste Teigberechnung fur ambitionierte Home- und Profi-Pizza, mit klarerer Planung, besserer Backfuhrung und einem deutlich starkeren Rezept-Workflow.",
+    resetStyle: "Stil zurucksetzen",
+    printRecipe: "Rezept drucken",
+    settings: "Einstellungen",
+    theme: "Thema",
+    language: "Sprache",
+    temperatureUnit: "Temperatur",
+    sizeUnit: "Laengeneinheit",
+    english: "English",
+    german: "Deutsch",
+    dark: "Dunkel",
+    light: "Hell",
+    fahrenheit: "Fahrenheit",
+    celsius: "Celsius",
+    styles: "Stile",
+    doughSetup: "Teig-Setup",
+    fermentation: "Fermentation",
+    doughStudio: "Vorteig & Mehl",
+    bakeSurface: "Form & Backen",
+    ovenProfile: "Ofenprofil",
+    planner: "Backplanung",
+    formula: "Rezeptblatt",
+    recipeHealth: "Qualitatscheck",
+    guidance: "Hinweise",
+    method: "Ablauf",
+    cost: "Zutatenkosten",
+    savedRecipes: "Rezeptbibliothek",
+    bakeJournal: "Backjournal",
+    doughBalls: "Teiglinge",
+    ballWeight: "Teiglingsgewicht",
+    hydration: "Hydration",
+    salt: "Salz",
+    oil: "Ol",
+    sugar: "Zucker",
+    honey: "Honig",
+    malt: "Malz",
+    lard: "Schmalz",
+    milkPowder: "Milchpulver",
+    yeastType: "Hefe",
+    mixerType: "Mischer",
+    manualYeast: "Manuelle Hefe",
+    flourTemp: "Mehltemp.",
+    roomBulk: "Raumgare",
+    cellarTime: "Kellergare",
+    coldBulk: "Kuehl-Stockgare",
+    coldBall: "Kuehl-Stueckgare",
+    finalRise: "Endgare",
+    roomTemp: "Raumtemp.",
+    cellarTemp: "Kellertemp.",
+    fridgeTemp: "Kuehlschranktemp.",
+    prefermentMode: "Vorteig-Stil",
+    none: "Keiner",
+    poolish: "Poolish",
+    biga: "Biga",
+    tiga: "Tiga",
+    bassinage: "Bassinage",
+    prefermentFlour: "Vorteig-Mehl",
+    bigaHydration: "Biga-Hydration",
+    prefermentRoom: "Vorteig Raum",
+    prefermentCold: "Vorteig kalt",
+    flourBlend: "Mehlmischung",
+    addFlour: "Mehl hinzufugen",
+    blendTotal: "Mischung gesamt",
+    totalLabel: "gesamt",
+    panGeometry: "Blechgeometrie",
+    quickWeights: "Schnellgewichte",
+    sizeHint: "Ein Durchmesser setzt ein typisches Teiggewicht fur diesen Stil.",
+    shape: "Form",
+    unit: "Einheit",
+    rectangular: "Rechteckig",
+    round: "Rund",
+    inches: "Zoll",
+    centimeters: "Zentimeter",
+    length: "Lange",
+    width: "Breite",
+    diameter: "Durchmesser",
+    depth: "Tiefe",
+    applyPanWeight: "Blechgewicht ubernehmen",
+    stoneTemp: "Steintemp.",
+    topHeat: "Oberhitze",
+    deckTemp: "Decktemp.",
+    broilerFinish: "Grill-Finish",
+    finishingBroil: "Abschlussgrill",
+    sauce: "Sauce",
+    sauceStyle: "Saucenstil",
+    sauceWeight: "Sauce / Pizza",
+    sauceHint: "Fuegt Saucenhinweise im Rezeptblatt und Ablauf hinzu.",
+    sauceClassic: "Klassische Tomate",
+    sauceRaw: "Rohe Tomate",
+    sauceCooked: "Gekochte Tomate",
+    sauceWhite: "Weisse Sauce",
+    today: "Jetzt starten",
+    readyBy: "Fertig bis",
+    readyDate: "Fertig am",
+    flour: "Mehl",
+    water: "Wasser",
+    yeast: "Hefe",
+    bake: "Backen",
+    effectiveFerment: "Effektive Gare",
+    totalTime: "Gesamtzeit",
+    waterTemp: "Wassertemp.",
+    targetFdt: "Ziel-FDT",
+    bakeTime: "Backzeit",
+    prefermentSplit: "Vorteig-Aufteilung",
+    mainDough: "Hauptteig",
+    inPreferment: "im Vorteig",
+    mainDoughAdditions: "Hauptteig-Zugaben",
+    additionalFlour: "zusaetzliches Mehl",
+    additionalWater: "zusaetzliches Wasser",
+    additionalYeast: "zusaetzliche Hefe",
+    batch: "Charge",
+    perDough: "Pro Teigling",
+    recipeName: "Rezeptname",
+    save: "Speichern",
+    print: "Drucken",
+    export: "Export",
+    copy: "Kopieren",
+    addPhoto: "Foto hinzufugen",
+    removePhoto: "Foto entfernen",
+    rating: "Bewertung",
+    outcome: "Ergebnis",
+    notes: "Notizen",
+    notesPlaceholder:
+      "Wie lief der Backtag? Krume, Farbe, Formen, Ofenverhalten, nachste Anpassung...",
+    logBake: "Backen protokollieren",
+    keeper: "Bleibt so",
+    tweak: "Nachscharfen",
+    fail: "Fehlversuch",
+    savedCount: "gespeicherte Rezepte",
+    journalCount: "Journaleintrage",
+    noPhoto: "Noch kein Foto",
+    flourCost: "Mehl / kg",
+    yeastCost: "Hefe / kg",
+    oilCost: "Ol / kg",
+    currency: "Wahrung",
+    hydrationFit: "Hydration",
+    saltBalance: "Salzbalance",
+    fermentPlan: "Gareplan",
+    flourStrength: "Mehlstarke",
+    mixTemperature: "Mischtemperatur"
+  }
+} as const;
+
+type CopyText = Record<keyof typeof copy.en, string>;
+
+const yeastOptions: Array<{ value: YeastType; label: string }> = [
+  { value: "idy", label: "IDY" },
+  { value: "ady", label: "ADY" },
+  { value: "fresh", label: "Fresh" }
+];
+
+const ovenOptions: Array<{ value: OvenType; label: string }> = [
+  { value: "wood-fired", label: "Wood" },
+  { value: "coal-fired", label: "Coal" },
+  { value: "pizza-oven", label: "Pizza oven" },
+  { value: "deck-oven", label: "Deck" },
+  { value: "steel-stone", label: "Steel" },
+  { value: "conventional", label: "Home" }
+];
+
+const presetKeys = Object.keys(FERMENTATION_PRESETS) as FermentationPresetKey[];
+
+const sizePresets: Record<string, Record<number, number>> = {
+  default: { 10: 180, 12: 250, 14: 320, 16: 400, 18: 500 },
+  Neapolitan: { 10: 220, 12: 250, 14: 300, 16: 420, 18: 550 },
+  "Contemporary Neapolitan": { 10: 240, 12: 270, 14: 340, 16: 450, 18: 580 },
+  "New Haven": { 10: 220, 12: 260, 14: 320, 16: 420, 18: 550 },
+  "Pizza alla Pala": { 10: 280, 12: 350, 14: 450, 16: 550, 18: 700 },
+  "New York": { 10: 240, 12: 300, 14: 360, 16: 460, 18: 580 },
+  California: { 10: 220, 12: 260, 14: 320, 16: 420, 18: 520 },
+  Montreal: { 10: 250, 12: 300, 14: 360, 16: 440, 18: 560 },
+  Coca: { 10: 170, 12: 220, 14: 280, 16: 360, 18: 460 },
+  Flammkuchen: { 10: 160, 12: 200, 14: 250, 16: 320, 18: 400 },
+  Lahmacun: { 10: 120, 12: 150, 14: 180, 16: 220, 18: 260 }
+};
+
+function numberValue(value: string, fallback = 0): number {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function celsiusToFahrenheit(celsius: number): number {
+  return Math.round((celsius * 9) / 5 + 32);
+}
+
+function toLocalDateTimeInputValue(date: Date): string {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function displayTemperatureValue(tempF: number, unit: TemperatureUnit): number {
+  return unit === "F" ? Math.round(tempF) : fahrenheitToCelsius(tempF);
+}
+
+function parseTemperatureInput(value: string, unit: TemperatureUnit, fallbackF: number): number {
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed)) return fallbackF;
+  return unit === "F" ? parsed : celsiusToFahrenheit(parsed);
+}
+
+function formatTemperature(tempF: number, unit: TemperatureUnit): string {
+  const value = displayTemperatureValue(tempF, unit);
+  return `${value}\u00B0${unit}`;
+}
+
+function formatDateTime(value: string, locale: LocaleCode): string {
+  return new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(new Date(value));
+}
+
+function formatMoney(value: number, currency: string, locale: LocaleCode) {
+  return new Intl.NumberFormat(locale === "de" ? "de-DE" : "en-US", {
+    style: "currency",
+    currency
+  }).format(value);
+}
+
+function styleRange(result: DoughResult, field: "hydration" | "salt" | "oil" | "sugar", value: number) {
+  const range = result.style[field];
+  if (value < range.min || value > range.max) return "danger";
+  return "ok";
+}
+
+function clampTo(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function scoreAgainstRange(value: number, min: number, recommended: number, max: number) {
+  if (value < min || value > max) return 34;
+  const halfRange = value <= recommended ? recommended - min : max - recommended;
+  if (halfRange <= 0) return 100;
+  return Math.round(100 - clampTo(Math.abs(value - recommended) / halfRange, 0, 1) * 22);
+}
+
+function toneForScore(score: number): QualitySignal["tone"] {
+  if (score >= 86) return "ok";
+  if (score >= 68) return "notice";
+  if (score >= 45) return "warning";
+  return "danger";
+}
+
+function getPrefermentMode(input: CalculatorInput): PrefermentMode {
+  if (input.preferment.kind === "none") return "none";
+  if (input.preferment.kind === "poolish") return "poolish";
+  if (input.preferment.bigaStyle === "tiga") return "tiga";
+  if (input.preferment.bigaStyle === "bassinage") return "bassinage";
+  return "biga";
+}
+
+function getPrefermentPatch(mode: PrefermentMode): Partial<CalculatorInput["preferment"]> {
+  if (mode === "none") return { kind: "none" };
+  if (mode === "poolish") return { kind: "poolish", bigaStyle: "standard", bigaHydration: 100 };
+  if (mode === "tiga") return { kind: "biga", bigaStyle: "tiga", bigaHydration: 55 };
+  if (mode === "bassinage") return { kind: "biga", bigaStyle: "bassinage", bigaHydration: 55 };
+  return { kind: "biga", bigaStyle: "standard", bigaHydration: 55 };
+}
+
+function getPrefermentDisplayName(input: CalculatorInput, locale: LocaleCode): string {
+  if (input.preferment.kind === "poolish") return "Poolish";
+  if (input.preferment.bigaStyle === "tiga") return "Tiga";
+  if (input.preferment.bigaStyle === "bassinage") {
+    return locale === "de" ? "Bassinage-Biga" : "Bassinage biga";
+  }
+  return "Biga";
+}
+
+function getPresetLabel(key: FermentationPresetKey, locale: LocaleCode): string {
+  if (locale === "en") return FERMENTATION_PRESETS[key].label;
+
+  const labels: Record<FermentationPresetKey, string> = {
+    authentic: "Authentisch",
+    rapid: "Schnell",
+    express: "Express",
+    sameDay: "Gleicher Tag",
+    overnight: "Uber Nacht",
+    twoDay: "2 Tage",
+    threeDay: "3 Tage",
+    cellar: "Keller"
+  };
+
+  return labels[key];
+}
+
+function getSizePresetForStyle(styleName: string) {
+  return sizePresets[styleName] ?? sizePresets.default;
+}
+
+function roundTo(value: number, decimals = 1): number {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
+
+function convertDimension(value: number, from: SizeUnit, to: SizeUnit, decimals = 1): number {
+  if (from === to) return value;
+  const converted = from === "in" ? value * 2.54 : value / 2.54;
+  return roundTo(converted, decimals);
+}
+
+function convertPanToUnit(pan: CalculatorInput["pan"], nextUnit: SizeUnit): CalculatorInput["pan"] {
+  if (pan.unit === nextUnit) return pan;
+  const decimals = nextUnit === "cm" ? 1 : 2;
+
+  return {
+    ...pan,
+    unit: nextUnit,
+    length: convertDimension(pan.length, pan.unit, nextUnit, decimals),
+    width: convertDimension(pan.width, pan.unit, nextUnit, decimals),
+    diameter: convertDimension(pan.diameter, pan.unit, nextUnit, decimals),
+    depth: convertDimension(pan.depth, pan.unit, nextUnit, decimals)
+  };
+}
+
+function formatSizePresetLabel(sizeInches: number, unit: SizeUnit): string {
+  if (unit === "in") {
+    return `${sizeInches}"`;
+  }
+
+  return `${Math.round(sizeInches * 2.54)} cm`;
+}
+
+function formatArea(areaSqIn: number, unit: SizeUnit): string {
+  if (unit === "in") {
+    return `${roundTo(areaSqIn, 1)} sq in`;
+  }
+
+  return `${roundTo(areaSqIn * 6.4516, 1)} sq cm`;
+}
+
+function getLengthSuffix(unit: SizeUnit): string {
+  return unit === "in" ? '"' : "cm";
+}
+
+function rebalanceBlendPercentages(
+  blend: FlourBlendItem[],
+  index: number,
+  nextPercentage: number
+): FlourBlendItem[] {
+  if (blend.length <= 1) {
+    return blend.map((item) => ({ ...item, percentage: 100 }));
+  }
+
+  const target = clampTo(Math.round(nextPercentage), 0, 100);
+  const otherIndexes = blend.map((_, itemIndex) => itemIndex).filter((itemIndex) => itemIndex !== index);
+  const remaining = 100 - target;
+  const result = blend.map((item) => ({ ...item }));
+  result[index].percentage = target;
+
+  const sourceTotal = otherIndexes.reduce((sum, itemIndex) => sum + Math.max(0, blend[itemIndex].percentage), 0);
+  if (sourceTotal <= 0) {
+    const base = Math.floor(remaining / otherIndexes.length);
+    let extra = remaining - base * otherIndexes.length;
+    for (const itemIndex of otherIndexes) {
+      result[itemIndex].percentage = base + (extra > 0 ? 1 : 0);
+      if (extra > 0) extra -= 1;
+    }
+    return result;
+  }
+
+  const weighted = otherIndexes.map((itemIndex) => {
+    const raw = (Math.max(0, blend[itemIndex].percentage) / sourceTotal) * remaining;
+    const floor = Math.floor(raw);
+    return { itemIndex, raw, floor, fraction: raw - floor };
+  });
+
+  let assigned = weighted.reduce((sum, item) => sum + item.floor, 0);
+  for (const item of weighted) {
+    result[item.itemIndex].percentage = item.floor;
+  }
+
+  let leftovers = remaining - assigned;
+  const ranked = [...weighted].sort((left, right) => right.fraction - left.fraction);
+  for (let itemIndex = 0; itemIndex < ranked.length && leftovers > 0; itemIndex += 1) {
+    result[ranked[itemIndex].itemIndex].percentage += 1;
+    leftovers -= 1;
+  }
+
+  return result;
+}
+
+function normalizeBlendAfterRemoval(blend: FlourBlendItem[]): FlourBlendItem[] {
+  if (blend.length === 0) {
+    return [{ flourId: "caputo-pizzeria", percentage: 100 }];
+  }
+
+  if (blend.length === 1) {
+    return [{ ...blend[0], percentage: 100 }];
+  }
+
+  const total = blend.reduce((sum, item) => sum + Math.max(0, item.percentage), 0);
+  if (total <= 0) {
+    const even = Math.floor(100 / blend.length);
+    return blend.map((item, index) => ({
+      ...item,
+      percentage: index === blend.length - 1 ? 100 - even * (blend.length - 1) : even
+    }));
+  }
+
+  let assigned = 0;
+  return blend.map((item, index) => {
+    if (index === blend.length - 1) {
+      return { ...item, percentage: 100 - assigned };
+    }
+
+    const percentage = Math.round((Math.max(0, item.percentage) / total) * 100);
+    assigned += percentage;
+    return { ...item, percentage };
+  });
+}
+
+function allocateBlendGrams(blend: FlourBlendItem[], totalGrams: number): number[] {
+  if (blend.length === 0) return [];
+  if (totalGrams <= 0) return blend.map(() => 0);
+
+  const allocations = blend.map((item, index) => {
+    const raw = (Math.max(0, item.percentage) / 100) * totalGrams;
+    const floor = Math.floor(raw);
+    return { index, floor, fraction: raw - floor };
+  });
+
+  const grams = allocations.map((entry) => entry.floor);
+  let remaining = totalGrams - grams.reduce((sum, value) => sum + value, 0);
+  const ranked = [...allocations].sort((left, right) => right.fraction - left.fraction);
+
+  for (let index = 0; index < ranked.length && remaining > 0; index += 1) {
+    grams[ranked[index].index] += 1;
+    remaining -= 1;
+  }
+
+  return grams;
+}
+
+function getFlourLabel(flourId: string): string {
+  const flour = FLOURS.find((entry) => entry.id === flourId);
+  return flour ? `${flour.brand} ${flour.name}` : flourId;
+}
+
+function getSauceStyleLabel(style: CalculatorInput["sauce"]["style"], labels: CopyText): string {
+  switch (style) {
+    case "raw":
+      return labels.sauceRaw;
+    case "cooked":
+      return labels.sauceCooked;
+    case "white":
+      return labels.sauceWhite;
+    default:
+      return labels.sauceClassic;
+  }
+}
+
+function inferSauceStyleFromOption(option?: SauceRecipeOption): CalculatorInput["sauce"]["style"] {
+  if (!option) return "classic";
+  const searchable = `${option.name} ${option.description ?? ""} ${option.cookType}`.toLowerCase();
+
+  if (
+    searchable.includes("white") ||
+    searchable.includes("bianca") ||
+    searchable.includes("crema") ||
+    searchable.includes("alfredo")
+  ) {
+    return "white";
+  }
+
+  if (option.cookType.toLowerCase().includes("cook") || option.cookType.toLowerCase().includes("simmer")) {
+    return "cooked";
+  }
+
+  if (option.cookType.toLowerCase().includes("raw") || option.cookType.toLowerCase().includes("no-cook")) {
+    return "raw";
+  }
+
+  return "classic";
+}
+
+function formatTemperaturePair(tempF: number, unit: TemperatureUnit): string {
+  const secondaryUnit: TemperatureUnit = unit === "F" ? "C" : "F";
+  return `${formatTemperature(tempF, unit)} (${formatTemperature(tempF, secondaryUnit)})`;
+}
+
+function formatBakeWindow(
+  oven: DoughResult["oven"],
+  locale: LocaleCode,
+  unit: TemperatureUnit,
+  detail?: string
+): string {
+  const durationUnit = locale === "de" ? (oven.unit === "seconds" ? "Sek." : "Min.") : oven.unit;
+  return detail
+    ? `${detail}, ${oven.minTime}-${oven.maxTime} ${durationUnit}`
+    : `${oven.minTime}-${oven.maxTime} ${durationUnit} @ ${formatTemperature(oven.tempF, unit)}`;
+}
+
+function getWaterSummaryText(result: DoughResult, locale: LocaleCode, unit: TemperatureUnit) {
+  const water = result.waterTemperature;
+
+  return locale === "de"
+    ? {
+        title: "Wassertemperatur",
+        useText: `Wasser bei ${formatTemperaturePair(water.waterTempF, unit)} verwenden.`,
+        targetText: `Ziel-Teigtemperatur: ${formatTemperaturePair(water.targetFdtF, unit)} fur ${result.totalFermentationHours}h Gare.`
+      }
+    : {
+        title: "Water Temperature",
+        useText: `Use water at ${formatTemperaturePair(water.waterTempF, unit)}.`,
+        targetText: `Target dough temp: ${formatTemperaturePair(water.targetFdtF, unit)} for ${result.totalFermentationHours}h ferment.`
+      };
+}
+
+function getFermentationStageContent(
+  key: "bulk" | "temper" | "cold-ball" | "cold-bulk" | "cellar",
+  locale: LocaleCode
+): { title: string; subtitle: string; note?: string } {
+  const en = {
+    bulk: { title: "Bulk Ferment", subtitle: "room temp" },
+    temper: { title: "Temper", subtitle: "warm up before baking" },
+    "cold-ball": { title: "Cold Ball", subtitle: "shaped balls in fridge" },
+    "cold-bulk": {
+      title: "Cold Bulk",
+      subtitle: "bulk dough in fridge",
+      note: "Ferment as one mass, then divide and ball after. Better structure retention for long ferments at high hydration."
+    },
+    cellar: {
+      title: "Cellar Ferment",
+      subtitle: "50-65°F / 10-18°C",
+      note: "European method - slower than room temp, warmer than fridge."
+    }
+  } as const;
+
+  const de = {
+    bulk: { title: "Stockgare", subtitle: "bei Raumtemperatur" },
+    temper: { title: "Temperieren", subtitle: "vor dem Backen akklimatisieren" },
+    "cold-ball": { title: "Kalte Stuckgare", subtitle: "geformte Teiglinge im Kuhlschrank" },
+    "cold-bulk": {
+      title: "Kalte Stockgare",
+      subtitle: "Teig als Masse im Kuhlschrank",
+      note: "Erst als Masse kalt fuhren, danach teilen und rundschleifen. Das bringt bei langen, weichen Teigen oft mehr Struktur."
+    },
+    cellar: {
+      title: "Kellergare",
+      subtitle: "10-18°C / 50-65°F",
+      note: "Europaische Methode - langsamer als Raumtemperatur, warmer als der Kuhlschrank."
+    }
+  } as const;
+
+  return locale === "de" ? de[key] : en[key];
+}
+
+function getSauceUiCopy(locale: LocaleCode) {
+  return locale === "de"
+    ? {
+        options: "Saucenoptionen",
+        ingredients: "Zutaten",
+        instructions: "Anleitung",
+        proTip: "Profi-Tipp",
+        source: "Quelle",
+        yield: "Ergibt",
+        copyMethod: "Ablauf kopieren",
+        copyMethodCopied: "Kopiert",
+        copyMethodFailed: "Kopieren fehlgeschlagen",
+        madeWith: "Erstellt mit Pizza Geek"
+      }
+    : {
+        options: "Sauce Options",
+        ingredients: "Ingredients",
+        instructions: "Instructions",
+        proTip: "Pro Tip",
+        source: "Source",
+        yield: "Yield",
+        copyMethod: "Copy method",
+        copyMethodCopied: "Copied",
+        copyMethodFailed: "Copy failed",
+        madeWith: "Made with Pizza Geek"
+      };
+}
+
+function getEnrichmentHint(
+  key: "oil" | "sugar" | "honey" | "malt" | "lard" | "milk-powder",
+  locale: LocaleCode,
+  result: DoughResult
+) {
+  switch (key) {
+    case "oil":
+      return locale === "de"
+        ? `Bereich: ${result.style.oil.min}-${result.style.oil.max}%`
+        : `Range: ${result.style.oil.min}-${result.style.oil.max}%`;
+    case "sugar":
+      return locale === "de"
+        ? `Bereich: ${result.style.sugar.min}-${result.style.sugar.max}%`
+        : `Range: ${result.style.sugar.min}-${result.style.sugar.max}%`;
+    case "honey":
+      return locale === "de" ? "Alternative zu Zucker" : "Alternative to sugar";
+    case "malt":
+      return locale === "de" ? "Typisch: 0.5-1%" : "Typical: 0.5-1%";
+    case "lard":
+      return locale === "de" ? "Alternative zu Ol" : "Alternative to oil";
+    case "milk-powder":
+      return locale === "de" ? "Typisch: 1-2%" : "Typical: 1-2%";
+    default:
+      return undefined;
+  }
+}
+
+function normalizeCalculatorInput(candidate: CalculatorInput): CalculatorInput {
+  const styleId = candidate?.styleId ?? createDefaultInput().styleId;
+  const base = createDefaultInput(styleId);
+  const legacyPizzaOvenTemp = (candidate as CalculatorInput & { oven?: { pizzaOvenTempF?: number } }).oven
+    ?.pizzaOvenTempF;
+  const sauce = {
+    ...base.sauce,
+    ...candidate?.sauce
+  };
+  const normalizedSauceOption = getSauceOption(styleId, sauce.recipeId);
+
+  return {
+    ...base,
+    ...candidate,
+    fermentation: {
+      ...base.fermentation,
+      ...candidate?.fermentation
+    },
+    preferment: {
+      ...base.preferment,
+      ...candidate?.preferment
+    },
+    sauce: {
+      ...sauce,
+      recipeId: normalizedSauceOption?.id ?? sauce.recipeId,
+      style: normalizedSauceOption ? inferSauceStyleFromOption(normalizedSauceOption) : sauce.style
+    },
+    flourBlend: candidate?.flourBlend?.length ? normalizeBlendAfterRemoval(candidate.flourBlend) : base.flourBlend,
+    pan: {
+      ...base.pan,
+      ...candidate?.pan,
+      enabled: Boolean(getStyleById(styleId)?.panStyle)
+    },
+    oven: {
+      ...base.oven,
+      ...candidate?.oven,
+      pizzaOvenStoneTempF:
+        candidate?.oven?.pizzaOvenStoneTempF ??
+        (legacyPizzaOvenTemp ? Math.max(650, legacyPizzaOvenTemp - 75) : base.oven.pizzaOvenStoneTempF),
+      pizzaOvenTopTempF: candidate?.oven?.pizzaOvenTopTempF ?? legacyPizzaOvenTemp ?? base.oven.pizzaOvenTopTempF
+    }
+  };
+}
+
+function localizeWaterMessage(message: string, locale: LocaleCode): string {
+  if (locale === "en") return message;
+
+  const translations: Record<string, string> = {
+    "Ice water needed. Chill water thoroughly and include ice if required.":
+      "Sehr kaltes Wasser notig. Wasser stark herunterkuhlen und bei Bedarf Eis einplanen.",
+    "Very cold water. Refrigerate the water before mixing.":
+      "Sehr kaltes Wasser. Das Wasser vor dem Mischen kuhlschrankkalt machen.",
+    "Warm water. Check yeast freshness and avoid overheating the dough.":
+      "Warmes Wasser. Hefefrische prufen und ein Uberhitzen des Teigs vermeiden.",
+    "Active dry yeast works best if bloomed separately in warm water first.":
+      "Aktive Trockenhefe funktioniert am besten, wenn sie zuerst separat in warmem Wasser aktiviert wird."
+  };
+
+  return translations[message] ?? message;
+}
+
+function getOvenDetailText(
+  input: CalculatorInput,
+  labels: CopyText,
+  unit: TemperatureUnit
+): string | undefined {
+  if (input.oven.type === "pizza-oven") {
+    return `${labels.stoneTemp}: ${formatTemperature(input.oven.pizzaOvenStoneTempF, unit)}, ${labels.topHeat}: ${formatTemperature(input.oven.pizzaOvenTopTempF, unit)}`;
+  }
+
+  if (input.oven.type === "deck-oven") {
+    return `${labels.deckTemp}: ${formatTemperature(input.oven.deckOvenTempF, unit)}`;
+  }
+
+  return undefined;
+}
+
+function localizePlanStep(
+  step: BakeStep,
+  input: CalculatorInput,
+  locale: LocaleCode,
+  unit: TemperatureUnit
+): { label: string; description: string } {
+  const prefermentName = getPrefermentDisplayName(input, locale);
+  const roomTemp = formatTemperature(input.fermentation.roomTempF, unit);
+  const cellarTemp = formatTemperature(input.fermentation.cellarTempF, unit);
+  const fridgeTemp = formatTemperature(input.fermentation.fridgeTempF, unit);
+
+  switch (step.label) {
+    case "Mix Poolish":
+    case "Mix Biga":
+    case "Mix Tiga":
+    case "Mix Bassinage biga":
+      return locale === "de"
+        ? {
+            label: `${prefermentName} mischen`,
+            description: `Den ${prefermentName.toLowerCase()} ansetzen.`
+          }
+        : {
+            label: `Mix ${prefermentName}`,
+            description: `Build the ${prefermentName.toLowerCase()} preferment.`
+          };
+    case "Poolish ferments":
+    case "Biga ferments":
+    case "Tiga ferments":
+    case "Bassinage biga ferments":
+      return locale === "de"
+        ? {
+            label: `${prefermentName} reift`,
+            description: `${input.preferment.roomHours}h bei Raumtemperatur.`
+          }
+        : {
+            label: `${prefermentName} Ferments`,
+            description: `${input.preferment.roomHours}h @ ${roomTemp}.`
+          };
+    case "Poolish cold ferment":
+    case "Biga cold ferment":
+    case "Tiga cold ferment":
+    case "Bassinage biga cold ferment":
+      return locale === "de"
+        ? {
+            label: `${prefermentName} kalt fuhren`,
+            description: `${input.preferment.coldHours}h im Kuhlschrank.`
+          }
+        : {
+            label: `${prefermentName} Cold Ferment`,
+            description: `${input.preferment.coldHours}h @ ${fridgeTemp}.`
+          };
+    case "Mix and knead":
+      return locale === "de"
+        ? {
+            label: "Mischen und kneten",
+            description: "Kombinieren, ruhen lassen und dann glatt ausarbeiten."
+          }
+        : {
+            label: "Mix and knead",
+            description: "Combine, rest, then knead or fold until smooth."
+          };
+    case "Mix final dough":
+      return locale === "de"
+        ? {
+            label: "Hauptteig mischen",
+            description: "Mischen und den Teig sauber ausentwickeln."
+          }
+        : {
+            label: "Mix final dough",
+            description: "Mix the main dough and finish development cleanly."
+          };
+    case "Bulk Ferment":
+      return locale === "de"
+        ? {
+            label: "Stockgare",
+            description: `${input.fermentation.roomTempHours}h bei etwa ${roomTemp}.`
+          }
+        : {
+            label: "Bulk Ferment",
+            description: `${input.fermentation.roomTempHours}h @ ${roomTemp}.`
+          };
+    case "Cellar Ferment":
+      return locale === "de"
+        ? {
+            label: "Kellergare",
+            description: `${input.fermentation.cellarTempHours}h bei etwa ${cellarTemp}.`
+          }
+        : {
+            label: "Cellar Ferment",
+            description: `${input.fermentation.cellarTempHours}h @ ${cellarTemp}.`
+          };
+    case "Cold Bulk":
+      return locale === "de"
+        ? {
+            label: "Kalte Stockgare",
+            description: `${input.fermentation.coldBulkHours}h bei etwa ${fridgeTemp} als Masse. Danach teilen und rundschleifen.`
+          }
+        : {
+            label: "Cold Bulk",
+            description: `${input.fermentation.coldBulkHours}h @ ${fridgeTemp} as one mass, then divide and ball.`
+          };
+    case "Divide and ball":
+      return locale === "de"
+        ? {
+            label: "Teilen und rundschleifen",
+            description: "Nach der kalten Stockgare portionieren und straff rundschleifen."
+          }
+        : {
+            label: "Divide and ball",
+            description: "Portion the dough and ball it after the cold bulk stage."
+          };
+    case "Cold Ball":
+      return locale === "de"
+        ? {
+            label: "Kalte Stuckgare",
+            description: `${input.fermentation.coldBallHours}h bei etwa ${fridgeTemp}.`
+          }
+        : {
+            label: "Cold Ball",
+            description: `${input.fermentation.coldBallHours}h @ ${fridgeTemp}.`
+          };
+    case "Temper":
+      return locale === "de"
+        ? {
+            label: "Temperieren",
+            description: `${input.fermentation.finalRiseHours}h vor dem Backen bei etwa ${roomTemp}.`
+          }
+        : {
+            label: "Temper",
+            description: `${input.fermentation.finalRiseHours}h @ ${roomTemp} before baking.`
+          };
+    case "Ball Proof":
+      return locale === "de"
+        ? {
+            label: "Stuckgare",
+            description: `${input.fermentation.finalRiseHours}h Endgare vor dem Backen.`
+          }
+        : {
+            label: "Ball Proof",
+            description: `${input.fermentation.finalRiseHours}h final proof before baking.`
+          };
+    case "Ready to bake":
+      return locale === "de"
+        ? {
+            label: "Bereit zum Backen",
+            description: "Vorheizen, formen, belegen und backen."
+          }
+        : {
+            label: "Ready to bake",
+            description: "Preheat, stretch, top, and bake."
+          };
+    default:
+      return { label: step.label, description: step.description };
+  }
+}
+
+function getMethodSteps(
+  input: CalculatorInput,
+  result: DoughResult,
+  locale: LocaleCode,
+  unit: TemperatureUnit
+): string[] {
+  const steps: string[] = [];
+  const water = result.waterTemperature;
+  const ingredients = result.ingredients;
+  const prefermentName = getPrefermentDisplayName(input, locale);
+  const sauceOption = getSauceOption(input.styleId, input.sauce.recipeId);
+  const waterSummary = getWaterSummaryText(result, locale, unit);
+  const bakeDetail = getOvenDetailText(input, copy[locale], unit);
+  const bakeWindow = formatBakeWindow(result.oven, locale, unit, bakeDetail);
+
+  if (input.preferment.kind !== "none") {
+    steps.push(
+      locale === "de"
+        ? `${prefermentName} mischen: ${ingredients.prefermentFlour}g Mehl (${input.preferment.flourPercent}% vom Gesamtmehl), ${ingredients.prefermentWater}g Wasser und ${ingredients.prefermentYeast}g Hefe kombinieren. ${input.preferment.roomHours}h bei Raumtemperatur reifen lassen${input.preferment.coldHours > 0 ? `, danach ${input.preferment.coldHours}h kalt fuhren` : ""}.`
+        : `Mix ${prefermentName}: combine ${ingredients.prefermentFlour}g flour (${input.preferment.flourPercent}% of total flour), ${ingredients.prefermentWater}g water, and ${ingredients.prefermentYeast}g yeast. Ferment ${input.preferment.roomHours}h at room temperature${input.preferment.coldHours > 0 ? `, then ${input.preferment.coldHours}h cold` : ""}.`
+    );
+  }
+
+  if (input.yeastType === "ady" && water.adyProofing) {
+    steps.push(
+      locale === "de"
+        ? `Aktive Trockenhefe in ${water.adyProofing.proofingWaterG}g Wasser bei ${formatTemperaturePair(water.adyProofing.proofingWaterTempF, unit)} aktivieren. Die restlichen ${water.adyProofing.remainingWaterG}g Wasser auf ${formatTemperaturePair(water.adyProofing.remainingWaterTempF, unit)} einstellen.`
+        : `Bloom ADY in ${water.adyProofing.proofingWaterG}g water at ${formatTemperaturePair(water.adyProofing.proofingWaterTempF, unit)}. Keep the remaining ${water.adyProofing.remainingWaterG}g water at ${formatTemperaturePair(water.adyProofing.remainingWaterTempF, unit)}.`
+    );
+  } else {
+    steps.push(`${waterSummary.useText} ${waterSummary.targetText}`);
+  }
+
+  const flour = input.preferment.kind === "none" ? ingredients.totalFlour : ingredients.mainFlour;
+  const waterAmount = input.preferment.kind === "none" ? ingredients.totalWater : ingredients.mainWater;
+  const yeast = input.preferment.kind === "none" ? ingredients.totalYeast : ingredients.mainYeast;
+  const yeastLabel =
+    input.yeastType === "ady" ? "aktive Trockenhefe" : input.yeastType === "fresh" ? "frische Hefe" : "Instanthefe";
+
+  steps.push(
+    locale === "de"
+      ? `Hauptteig mischen mit ${flour}g ${input.preferment.kind === "none" ? "Mehl" : "zusaetzlichem Mehl"}, ${waterAmount}g ${input.preferment.kind === "none" ? "Wasser" : "zusaetzlichem Wasser"}, ${ingredients.totalSalt}g Salz und ${yeast}g ${input.preferment.kind === "none" ? yeastLabel : `zusaetzlicher ${yeastLabel}`}${input.preferment.kind !== "none" ? ` sowie dem reifen ${prefermentName}` : ""}.`
+      : `Mix the final dough with ${flour}g ${input.preferment.kind === "none" ? "flour" : "fresh flour"}, ${waterAmount}g ${input.preferment.kind === "none" ? "water" : "fresh water"}, ${ingredients.totalSalt}g salt, and ${yeast}g ${input.preferment.kind === "none" ? (input.yeastType === "ady" ? "active dry yeast" : input.yeastType === "fresh" ? "fresh yeast" : "instant dry yeast") : `additional ${input.yeastType === "ady" ? "active dry yeast" : input.yeastType === "fresh" ? "fresh yeast" : "instant dry yeast"}`}${input.preferment.kind !== "none" ? ` plus the ripe ${prefermentName}` : ""}.`
+  );
+
+  const enrichments = [
+    ingredients.totalOil > 0 ? `${ingredients.totalOil}g Ã–l` : null,
+    ingredients.totalLard > 0 ? `${ingredients.totalLard}g Schmalz` : null,
+    ingredients.totalSugar > 0 ? `${ingredients.totalSugar}g Zucker` : null,
+    ingredients.totalHoney > 0 ? `${ingredients.totalHoney}g Honig` : null,
+    ingredients.totalMalt > 0 ? `${ingredients.totalMalt}g Malz` : null,
+    ingredients.totalMilkPowder > 0 ? `${ingredients.totalMilkPowder}g Milchpulver` : null
+  ].filter(Boolean);
+
+  if (enrichments.length > 0) {
+    steps.push(locale === "de" ? `Weitere Zutaten einarbeiten: ${enrichments.join(", ")}.` : `Add the enrichments: ${enrichments.join(", ")}.`);
+  }
+
+  if (input.mixerType === "hand") {
+    steps.push(
+      locale === "de"
+        ? "20 Minuten ruhen lassen, dann kneten oder dehnen und falten, bis der Teig glatt und elastisch ist."
+        : "Rest 20 minutes, then knead or stretch-and-fold until the dough is smooth and elastic."
+    );
+  } else if (input.mixerType === "spiral") {
+    steps.push(
+      locale === "de"
+        ? "Etwa 3 Minuten auf Stufe 1 mischen, dann 5-8 Minuten auf Stufe 2 bis zur guten Entwicklung."
+        : "Mix on speed 1 for about 3 minutes, then on speed 2 for 5-8 minutes until the dough is developed."
+    );
+  } else {
+    steps.push(
+      locale === "de"
+        ? "Auf niedriger Stufe mischen, dann auf mittlerer Stufe auskneten, bis der Teig sauber von der Schussel lost."
+        : "Mix on low until combined, then on medium-low until the dough clears the bowl and feels cohesive."
+    );
+  }
+
+  if (input.fermentation.roomTempHours > 0) {
+    steps.push(
+      locale === "de"
+        ? `Stockgare ${input.fermentation.roomTempHours}h bei etwa ${formatTemperature(input.fermentation.roomTempF, unit)}.`
+        : `Bulk ferment ${input.fermentation.roomTempHours}h @ ${formatTemperature(input.fermentation.roomTempF, unit)}.`
+    );
+  }
+
+  if (input.fermentation.cellarTempHours > 0) {
+    steps.push(
+      locale === "de"
+        ? `Danach ${input.fermentation.cellarTempHours}h bei Kellerbedingungen um ${formatTemperature(input.fermentation.cellarTempF, unit)}.`
+        : `Cellar ferment ${input.fermentation.cellarTempHours}h @ ${formatTemperature(input.fermentation.cellarTempF, unit)}.`
+    );
+  }
+
+  if (input.fermentation.coldBulkHours > 0) {
+    steps.push(
+      locale === "de"
+        ? `Kalte Stockgare ${input.fermentation.coldBulkHours}h im Kuhlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}. Danach teilen und rundschleifen.`
+        : `Cold bulk ${input.fermentation.coldBulkHours}h @ ${formatTemperature(input.fermentation.fridgeTempF, unit)} as one mass, then divide and ball.`
+    );
+  }
+
+  if (!result.style.panStyle) {
+    const divideStep =
+      locale === "de"
+        ? `In ${input.doughBalls} Teigling${input.doughBalls === 1 ? "" : "e"} zu je etwa ${input.ballWeight}g teilen und rundschleifen.`
+        : `Divide into ${input.doughBalls} dough ball${input.doughBalls === 1 ? "" : "s"} at about ${input.ballWeight}g each.`;
+
+    if (input.fermentation.coldBulkHours > 0 || input.fermentation.coldBallHours === 0) {
+      steps.push(divideStep);
+    }
+  }
+
+  if (input.fermentation.coldBallHours > 0) {
+    steps.push(
+      locale === "de"
+        ? `Kalte Stuckgare ${input.fermentation.coldBallHours}h im Kuhlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}.`
+        : `Cold ball ${input.fermentation.coldBallHours}h @ ${formatTemperature(input.fermentation.fridgeTempF, unit)} after dividing.`
+    );
+  }
+
+  if (result.style.panStyle) {
+    steps.push(
+      locale === "de"
+        ? "Die Form grosszugig olen, den Teig einlegen und vor dem finalen Ausziehen entspannt aufgehen lassen."
+        : "Oil the pan generously, place the dough in it, and proof until relaxed before the final stretch."
+    );
+  }
+
+  if (input.fermentation.finalRiseHours > 0) {
+    steps.push(
+      locale === "de"
+        ? `Temperieren ${input.fermentation.finalRiseHours}h bei etwa ${formatTemperature(input.fermentation.roomTempF, unit)} vor dem Backen.`
+        : `Temper ${input.fermentation.finalRiseHours}h @ ${formatTemperature(input.fermentation.roomTempF, unit)} before baking.`
+    );
+  }
+
+  if (result.sauce) {
+    steps.push(
+      locale === "de"
+        ? `Sauce vorbereiten: ${result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, copy.de)}. Etwa ${result.sauce.perPizzaGrams}g pro Pizza verwenden, insgesamt ${result.sauce.totalGrams}g fur den Batch.`
+        : `Prepare the sauce: ${result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, copy.en)}. Use about ${result.sauce.perPizzaGrams}g per pizza, ${result.sauce.totalGrams}g total.`
+    );
+
+    if (sauceOption?.instructions.length) {
+      for (const instruction of sauceOption.instructions) {
+        steps.push(instruction);
+      }
+    }
+  }
+
+  steps.push(
+    locale === "de"
+      ? `Backen mit ${bakeWindow}, bis Boden und Rand sauber ausgebacken sind und die Oberflache die gewunschte Farbe hat.`
+      : `Bake with ${bakeWindow} until the bottom is crisp and the top is properly browned.`
+  );
+
+  return steps;
+}
+
+function buildQualitySignals(
+  result: DoughResult,
+  input: CalculatorInput,
+  settings: AppSettings,
+  labels: CopyText
+): QualitySignal[] {
+  const hydrationScore = scoreAgainstRange(
+    input.hydrationPercent,
+    result.style.hydration.min,
+    result.style.hydration.recommended,
+    result.style.hydration.max
+  );
+  const saltScore = scoreAgainstRange(
+    input.saltPercent,
+    result.style.salt.min,
+    result.style.salt.recommended,
+    result.style.salt.max
+  );
+  const fermentDelta = Math.abs(result.totalFermentationHours - result.style.fermentationHours.recommended);
+  const fermentScore =
+    result.totalFermentationHours < result.style.fermentationHours.min ||
+    result.totalFermentationHours > result.style.fermentationHours.max
+      ? 50
+      : Math.round(
+          100 -
+            clampTo(
+              fermentDelta / Math.max(1, result.style.fermentationHours.max - result.style.fermentationHours.min),
+              0,
+              1
+            ) *
+              26
+        );
+  const flourScore =
+    result.flourBlend.warningColor === "danger"
+      ? 35
+      : result.flourBlend.warningColor === "warning"
+        ? 55
+        : result.flourBlend.warningColor === "notice"
+          ? 75
+          : 94;
+  const waterScore = result.waterTemperature.warning ? 64 : 94;
+
+  return [
+    {
+      label: labels.hydrationFit,
+      value: `${input.hydrationPercent}%`,
+      score: hydrationScore,
+      tone: toneForScore(hydrationScore),
+      note: `${result.style.hydration.min}-${result.style.hydration.max}%`
+    },
+    {
+      label: labels.saltBalance,
+      value: `${input.saltPercent}%`,
+      score: saltScore,
+      tone: toneForScore(saltScore),
+      note: `${result.style.salt.recommended}%`
+    },
+    {
+      label: labels.fermentPlan,
+      value: `${result.totalFermentationHours}h`,
+      score: fermentScore,
+      tone: toneForScore(fermentScore),
+      note: `${result.effectiveFermentationHours}h adjusted`
+    },
+    {
+      label: labels.flourStrength,
+      value: result.flourBlend.blendedW ? `W${result.flourBlend.blendedW}` : "Off",
+      score: flourScore,
+      tone: toneForScore(flourScore),
+      note: result.flourBlend.warning ?? result.flourBlend.description
+    },
+    {
+      label: labels.mixTemperature,
+      value: formatTemperature(result.waterTemperature.waterTempF, settings.temperatureUnit),
+      score: waterScore,
+      tone: toneForScore(waterScore),
+      note:
+        result.waterTemperature.warning ??
+        `Targets ${formatTemperature(result.waterTemperature.targetFdtF, settings.temperatureUnit)}`
+    }
+  ];
+}
+
+export function App() {
+  const [storedSettings, setSettings] = usePersistentState<AppSettings>(
+    STORAGE_KEYS.settings,
+    DEFAULT_SETTINGS,
+    { legacyKeys: ["pizza-nerd.settings"] }
+  );
+  const [input, setInput] = usePersistentState<CalculatorInput>(
+    STORAGE_KEYS.input,
+    createDefaultInput(),
+    { legacyKeys: ["pizza-nerd.input"] }
+  );
+  const [costSettings, setCostSettings] = usePersistentState<CostSettings>(
+    STORAGE_KEYS.costs,
+    defaultCostSettings(),
+    { legacyKeys: ["pizza-nerd.costs"] }
+  );
+  const [savedRecipes, setSavedRecipes] = usePersistentState<SavedRecipe[]>(
+    STORAGE_KEYS.saved,
+    [],
+    { legacyKeys: ["pizza-nerd.saved"] }
+  );
+  const [bakeLog, setBakeLog] = usePersistentState<BakeLogEntry[]>(
+    STORAGE_KEYS.bakeLog,
+    [],
+    { legacyKeys: ["pizza-nerd.bake-log"] }
+  );
+  const [preset, setPreset] = useState<FermentationPresetKey>(() => choosePresetForStyle(createDefaultInput().styleId));
+  const [planMode, setPlanMode] = useState<"starting-now" | "ready-by">("starting-now");
+  const [readyBy, setReadyBy] = useState(() => {
+    const date = new Date(Date.now() + 48 * 60 * 60 * 1000);
+    date.setMinutes(0, 0, 0);
+    return toLocalDateTimeInputValue(date);
+  });
+  const [copyMethodState, setCopyMethodState] = useState<"idle" | "copied" | "failed">("idle");
+  const [recipeName, setRecipeName] = useState("House dough");
+  const [logDraft, setLogDraft] = useState<{
+    rating: number;
+    outcome: BakeLogEntry["outcome"];
+    notes: string;
+    photoDataUrl?: string;
+    photoName?: string;
+  }>({
+    rating: 5,
+    outcome: "keeper",
+    notes: ""
+  });
+
+  const settings = useMemo(
+    () => ({
+      ...DEFAULT_SETTINGS,
+      ...storedSettings
+    }),
+    [storedSettings]
+  );
+  const t = copy[settings.language];
+  const sauceUi = getSauceUiCopy(settings.language);
+  const normalizedInput = useMemo(() => {
+    const normalized = normalizeCalculatorInput(input);
+    return normalized.pan.unit === settings.sizeUnit
+      ? normalized
+      : {
+          ...normalized,
+          pan: convertPanToUnit(normalized.pan, settings.sizeUnit)
+        };
+  }, [input, settings.sizeUnit]);
+  const result = useMemo(() => calculateDough(normalizedInput), [normalizedInput]);
+  const selectedSauceCollection = useMemo(
+    () => getSauceCollectionForStyle(normalizedInput.styleId),
+    [normalizedInput.styleId]
+  );
+  const selectedSauceOption = useMemo(
+    () => getSauceOption(normalizedInput.styleId, normalizedInput.sauce.recipeId),
+    [normalizedInput.sauce.recipeId, normalizedInput.styleId]
+  );
+  const prefermentMode = getPrefermentMode(normalizedInput);
+  const prefermentName = getPrefermentDisplayName(normalizedInput, settings.language);
+  const prefermentFlourGrams = prefermentMode === "none" ? 0 : (result.ingredients.prefermentFlour ?? 0);
+  const mainDoughFlourGrams = prefermentMode === "none" ? 0 : (result.ingredients.mainFlour ?? 0);
+  const mainDoughWaterGrams = prefermentMode === "none" ? 0 : (result.ingredients.mainWater ?? 0);
+  const mainDoughYeastGrams = prefermentMode === "none" ? 0 : (result.ingredients.mainYeast ?? 0);
+  const activeStyle = result.style;
+  const usesPanGeometry = Boolean(activeStyle.panStyle);
+  const cost = useMemo(
+    () => calculateCost(result, costSettings, normalizedInput.doughBalls),
+    [costSettings, normalizedInput.doughBalls, result]
+  );
+  const qualitySignals = useMemo(
+    () => buildQualitySignals(result, normalizedInput, settings, t),
+    [normalizedInput, result, settings, t]
+  );
+  const plan = useMemo<BakeStep[]>(() => {
+    const anchor = planMode === "ready-by" ? new Date(readyBy) : new Date();
+    return buildBakePlan(normalizedInput, planMode, anchor);
+  }, [normalizedInput, planMode, readyBy]);
+  const localizedPlan = useMemo(
+    () =>
+      plan.map((step) => ({
+        ...step,
+        ...localizePlanStep(step, normalizedInput, settings.language, settings.temperatureUnit)
+      })),
+    [plan, normalizedInput, settings.language, settings.temperatureUnit]
+  );
+  const methodSteps = useMemo(
+    () => getMethodSteps(normalizedInput, result, settings.language, settings.temperatureUnit),
+    [normalizedInput, result, settings.language, settings.temperatureUnit]
+  );
+  const ovenDetail = useMemo(
+    () => getOvenDetailText(normalizedInput, t, settings.temperatureUnit),
+    [normalizedInput, settings.temperatureUnit, t]
+  );
+  const waterSummary = useMemo(
+    () => getWaterSummaryText(result, settings.language, settings.temperatureUnit),
+    [result, settings.language, settings.temperatureUnit]
+  );
+  const sizePreset = useMemo(() => getSizePresetForStyle(activeStyle.name), [activeStyle.name]);
+  const sizePresetEntries = useMemo(
+    () =>
+      Object.entries(sizePreset).map(([size, weight]) => ({
+        sizeInches: Number(size),
+        weight,
+        label: formatSizePresetLabel(Number(size), settings.sizeUnit)
+      })),
+    [settings.sizeUnit, sizePreset]
+  );
+  const blendTotal = useMemo(
+    () => normalizedInput.flourBlend.reduce((sum, item) => sum + item.percentage, 0),
+    [normalizedInput.flourBlend]
+  );
+  const blendBreakdown = useMemo<BlendBreakdownRow[]>(() => {
+    if (!normalizedInput.flourBlendEnabled) return [];
+
+    const totalGrams = allocateBlendGrams(normalizedInput.flourBlend, result.ingredients.totalFlour);
+    const prefermentGrams =
+      prefermentMode === "none"
+        ? normalizedInput.flourBlend.map(() => 0)
+        : allocateBlendGrams(normalizedInput.flourBlend, prefermentFlourGrams);
+    const mainGrams =
+      prefermentMode === "none"
+        ? normalizedInput.flourBlend.map(() => 0)
+        : allocateBlendGrams(normalizedInput.flourBlend, mainDoughFlourGrams);
+
+    return normalizedInput.flourBlend.map((item, index) => ({
+      flourId: item.flourId,
+      percentage: item.percentage,
+      flourLabel: getFlourLabel(item.flourId),
+      totalGrams: totalGrams[index] ?? 0,
+      prefermentGrams: prefermentGrams[index] ?? 0,
+      mainDoughGrams: mainGrams[index] ?? 0
+    }));
+  }, [
+    mainDoughFlourGrams,
+    normalizedInput.flourBlend,
+    normalizedInput.flourBlendEnabled,
+    prefermentFlourGrams,
+    prefermentMode,
+    result.ingredients.totalFlour
+  ]);
+
+  useEffect(() => {
+    document.documentElement.lang = settings.language;
+    document.documentElement.dataset.theme = settings.theme;
+    document.documentElement.style.colorScheme = settings.theme;
+    document.title = `${activeStyle.name} | ${BRAND_NAME}`;
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    themeColor?.setAttribute("content", settings.theme === "dark" ? "#171717" : "#f1eee6");
+  }, [activeStyle.name, settings.language, settings.theme]);
+
+  useEffect(() => {
+    const serializedCurrent = JSON.stringify(input);
+    const serializedNormalized = JSON.stringify(normalizedInput);
+    if (serializedCurrent !== serializedNormalized) {
+      setInput(normalizedInput);
+    }
+  }, [input, normalizedInput, setInput]);
+
+  useEffect(() => {
+    if (copyMethodState === "idle") return;
+    const timer = window.setTimeout(() => setCopyMethodState("idle"), 1800);
+    return () => window.clearTimeout(timer);
+  }, [copyMethodState]);
+
+  const setPartial = (patch: Partial<CalculatorInput>) => {
+    setInput((current) => ({ ...normalizeCalculatorInput(current), ...patch }));
+  };
+
+  const setFermentation = (patch: Partial<CalculatorInput["fermentation"]>) => {
+    setInput((current) => {
+      const normalized = normalizeCalculatorInput(current);
+      return {
+        ...normalized,
+        fermentation: {
+          ...normalized.fermentation,
+          ...patch
+        }
+      };
+    });
+  };
+
+  const setPreferment = (patch: Partial<CalculatorInput["preferment"]>) => {
+    setInput((current) => {
+      const normalized = normalizeCalculatorInput(current);
+      return {
+        ...normalized,
+        preferment: {
+          ...normalized.preferment,
+          ...patch
+        }
+      };
+    });
+  };
+
+  const setPan = (patch: Partial<CalculatorInput["pan"]>) => {
+    setInput((current) => {
+      const normalized = normalizeCalculatorInput(current);
+      return {
+        ...normalized,
+        pan: {
+          ...normalized.pan,
+          ...patch
+        }
+      };
+    });
+  };
+
+  const setOven = (patch: Partial<CalculatorInput["oven"]>) => {
+    setInput((current) => {
+      const normalized = normalizeCalculatorInput(current);
+      return {
+        ...normalized,
+        oven: {
+          ...normalized.oven,
+          ...patch
+        }
+      };
+    });
+  };
+
+  const setSauce = (patch: Partial<CalculatorInput["sauce"]>) => {
+    setInput((current) => {
+      const normalized = normalizeCalculatorInput(current);
+      return {
+        ...normalized,
+        sauce: {
+          ...normalized.sauce,
+          ...patch
+        }
+      };
+    });
+  };
+
+  const updateTheme = (theme: ThemeMode) => {
+    setSettings((current) => ({
+      ...DEFAULT_SETTINGS,
+      ...current,
+      theme
+    }));
+  };
+
+  const updateSizeUnit = (nextUnit: SizeUnit) => {
+    setSettings((current) => ({
+      ...DEFAULT_SETTINGS,
+      ...current,
+      sizeUnit: nextUnit
+    }));
+    setInput((current) => {
+      const normalized = normalizeCalculatorInput(current);
+      return {
+        ...normalized,
+        pan: convertPanToUnit(normalized.pan, nextUnit)
+      };
+    });
+  };
+
+  const onStyleChange = (styleId: string) => {
+    const next = createDefaultInput(styleId);
+    next.pan = convertPanToUnit(next.pan, settings.sizeUnit);
+    setInput(next);
+    setPreset(choosePresetForStyle(styleId));
+    setRecipeName(`${getStyleById(styleId)?.name ?? "Pizza"} dough`);
+  };
+
+  const onPresetChange = (key: FermentationPresetKey) => {
+    setPreset(key);
+    setFermentation(
+      scheduleFromPreset(
+        key,
+        normalizedInput.fermentation.roomTempF,
+        normalizedInput.fermentation.cellarTempF,
+        normalizedInput.fermentation.fridgeTempF
+      )
+    );
+  };
+
+  const setBlendItem = (index: number, patch: Partial<FlourBlendItem>) => {
+    setInput((current) => {
+      const normalized = normalizeCalculatorInput(current);
+      const updatedBlend = normalized.flourBlend.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item
+      );
+
+      return {
+        ...normalized,
+        flourBlend:
+          patch.percentage === undefined
+            ? updatedBlend
+            : rebalanceBlendPercentages(updatedBlend, index, patch.percentage)
+      };
+    });
+  };
+
+  const addBlendItem = () => {
+    if (normalizedInput.flourBlend.length >= 4) return;
+    setInput((current) => {
+      const normalized = normalizeCalculatorInput(current);
+      const nextBlend = [
+        ...normalized.flourBlend,
+        { flourId: "caputo-manitoba-oro", percentage: 0 }
+      ];
+
+      return {
+        ...normalized,
+        flourBlend: rebalanceBlendPercentages(nextBlend, nextBlend.length - 1, Math.max(10, Math.round(100 / nextBlend.length)))
+      };
+    });
+  };
+
+  const removeBlendItem = (index: number) => {
+    setInput((current) => {
+      const normalized = normalizeCalculatorInput(current);
+      return {
+        ...normalized,
+        flourBlend: normalizeBlendAfterRemoval(
+          normalized.flourBlend.filter((_, itemIndex) => itemIndex !== index)
+        )
+      };
+    });
+  };
+
+  const applyPanWeight = () => {
+    const estimated = estimatePanBallWeight(normalizedInput.styleId, normalizedInput.pan);
+    if (!estimated) return;
+    setPartial({ doughBalls: 1, ballWeight: estimated });
+  };
+
+  const applySizePreset = (size: number) => {
+    const weight = sizePreset[size];
+    if (!weight) return;
+    setPartial({ ballWeight: weight });
+  };
+
+  const saveRecipe = () => {
+    const saved: SavedRecipe = {
+      id: crypto.randomUUID(),
+      name: recipeName.trim() || `${activeStyle.name} dough`,
+      createdAt: new Date().toISOString(),
+      input: normalizedInput
+    };
+    setSavedRecipes((items) => [saved, ...items]);
+  };
+
+  const exportRecipe = () => {
+    const payload = JSON.stringify({ name: recipeName, input: normalizedInput, result }, null, 2);
+    const blob = new Blob([payload], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${recipeName.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "pizza-geek-recipe"}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const copyShareText = async () => {
+    const lines = [
+      `${recipeName || activeStyle.name}`,
+      `${normalizedInput.doughBalls} x ${normalizedInput.ballWeight}g, ${result.percentages.hydration}% hydration`,
+      `${t.flour} ${result.ingredients.totalFlour}g, ${t.water} ${result.ingredients.totalWater}g, ${t.salt.toLowerCase()} ${result.ingredients.totalSalt}g, ${t.yeast.toLowerCase()} ${result.ingredients.totalYeast}g`,
+      `${t.bake} ${formatTemperature(result.oven.tempF, settings.temperatureUnit)} for ${result.oven.minTime}-${result.oven.maxTime} ${result.oven.unit}`
+    ];
+    if (prefermentMode !== "none") {
+      lines.push(
+        `${prefermentName}: ${normalizedInput.preferment.flourPercent}% = ${prefermentFlourGrams}g ${t.flour.toLowerCase()}; ${t.mainDoughAdditions}: ${mainDoughFlourGrams}g ${t.additionalFlour}, ${mainDoughWaterGrams}g ${t.additionalWater}, ${mainDoughYeastGrams}g ${t.additionalYeast}`
+      );
+    }
+    if (result.sauce) {
+      lines.push(
+        `${t.sauce}: ${result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, t)} - ${result.sauce.perPizzaGrams}g / pizza (${result.sauce.totalGrams}g total)`
+      );
+    }
+    await navigator.clipboard.writeText(lines.join("\n"));
+  };
+
+  const copyMethodText = async () => {
+    const lines = [`${recipeName || activeStyle.name}`, ...methodSteps.map((step, index) => `${index + 1}. ${step}`)];
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      setCopyMethodState("copied");
+    } catch {
+      setCopyMethodState("failed");
+    }
+  };
+
+  const printRecipe = () => window.print();
+
+  const loadSavedRecipe = (recipe: SavedRecipe) => {
+    setInput(normalizeCalculatorInput(recipe.input));
+    setRecipeName(recipe.name);
+  };
+
+  const onBakePhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setLogDraft((current) => ({
+        ...current,
+        photoDataUrl: String(reader.result),
+        photoName: file.name
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const addBakeLog = () => {
+    const entry: BakeLogEntry = {
+      id: crypto.randomUUID(),
+      date: new Date().toISOString(),
+      recipeName: recipeName.trim() || activeStyle.name,
+      rating: logDraft.rating,
+      outcome: logDraft.outcome,
+      notes: logDraft.notes,
+      photoDataUrl: logDraft.photoDataUrl,
+      photoName: logDraft.photoName
+    };
+    setBakeLog((items) => [entry, ...items]);
+    setLogDraft({ rating: 5, outcome: "keeper", notes: "" });
+  };
+
+  return (
+    <main className="appShell">
+      <header className="topbar">
+        <div className="brandLockup">
+          <img src={BRAND_LOGO_SRC} alt="" className="brandLogo" />
+          <div className="headingBlock">
+            <div className="brandRow">
+              <span className="brandMark">{t.brand}</span>
+              <span className="versionBadge" aria-label={`Version ${APP_VERSION}`}>
+                v{APP_VERSION}
+              </span>
+            </div>
+            <h1>{t.title}</h1>
+            <p>{t.subtitle}</p>
+          </div>
+        </div>
+        <div className="headerActions noPrint">
+          <button className="ghostButton" type="button" onClick={printRecipe}>
+            <Printer size={16} />
+            {t.printRecipe}
+          </button>
+          <button className="ghostButton" type="button" onClick={() => onStyleChange(normalizedInput.styleId)}>
+            <RotateCcw size={16} />
+            {t.resetStyle}
+          </button>
+        </div>
+      </header>
+
+      <section className="heroBand">
+        <div className="heroText">
+          <p className="eyebrow">{activeStyle.origin}</p>
+          <h2>{activeStyle.name}</h2>
+          <p>{activeStyle.profile}</p>
+          <div className="heroMeta">
+            <span>{activeStyle.flourType}</span>
+            <span>
+              {activeStyle.fermentationHours.recommended}h{" "}
+              {settings.language === "de" ? "Zielgare" : "target ferment"}
+            </span>
+            <span>
+              {formatTemperature(result.oven.tempF, settings.temperatureUnit)}{" "}
+              {settings.language === "de" ? "Backprofil" : "bake profile"}
+            </span>
+          </div>
+        </div>
+        <div className="metricStrip">
+          <Metric label={t.flour} value={`${result.ingredients.totalFlour}g`} />
+          <Metric label={t.water} value={`${result.ingredients.totalWater}g`} />
+          <Metric label={t.yeast} value={`${result.ingredients.totalYeast}g`} />
+          <Metric label={t.bake} value={formatTemperature(result.oven.tempF, settings.temperatureUnit)} />
+        </div>
+      </section>
+
+      <div className="workspace">
+        <div className="controlStack noPrint">
+          <section className="panel">
+            <PanelTitle icon={<Globe size={18} />} label={t.settings} />
+            <div className="fieldGrid compact">
+              <SelectField
+                label={t.language}
+                value={settings.language}
+                onChange={(value) =>
+                  setSettings((current) => ({
+                    ...DEFAULT_SETTINGS,
+                    ...current,
+                    language: value as LocaleCode
+                  }))
+                }
+              >
+                <option value="en">{t.english}</option>
+                <option value="de">{t.german}</option>
+              </SelectField>
+              <SelectField label={t.theme} value={settings.theme} onChange={(value) => updateTheme(value as ThemeMode)}>
+                <option value="dark">{t.dark}</option>
+                <option value="light">{t.light}</option>
+              </SelectField>
+              <SelectField
+                label={t.temperatureUnit}
+                value={settings.temperatureUnit}
+                onChange={(value) =>
+                  setSettings((current) => ({
+                    ...DEFAULT_SETTINGS,
+                    ...current,
+                    temperatureUnit: value as TemperatureUnit
+                  }))
+                }
+              >
+                <option value="F">{t.fahrenheit}</option>
+                <option value="C">{t.celsius}</option>
+              </SelectField>
+              <SelectField
+                label={t.sizeUnit}
+                value={settings.sizeUnit}
+                onChange={(value) => updateSizeUnit(value as SizeUnit)}
+              >
+                <option value="in">{t.inches}</option>
+                <option value="cm">{t.centimeters}</option>
+              </SelectField>
+            </div>
+          </section>
+
+          <section className="panel">
+            <PanelTitle icon={<BookOpen size={18} />} label={t.styles} />
+            <div className="styleGrid">
+              {PIZZA_STYLES.map((style) => (
+                <button
+                  className={style.id === normalizedInput.styleId ? "styleButton active" : "styleButton"}
+                  key={style.id}
+                  type="button"
+                  onClick={() => onStyleChange(style.id)}
+                >
+                  <strong>{style.name}</strong>
+                  <span>{style.flourType}</span>
+                  <small>{style.origin}</small>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel">
+            <PanelTitle icon={<Settings2 size={18} />} label={t.doughSetup} />
+            <div className="fieldGrid">
+              <Field
+                label={t.doughBalls}
+                value={normalizedInput.doughBalls}
+                min={1}
+                onChange={(value) => setPartial({ doughBalls: numberValue(value, 1) })}
+              />
+              <Field
+                label={t.ballWeight}
+                value={normalizedInput.ballWeight}
+                suffix="g"
+                min={1}
+                onChange={(value) => setPartial({ ballWeight: numberValue(value, 1) })}
+              />
+              <Field
+                label={t.hydration}
+                value={normalizedInput.hydrationPercent}
+                suffix="%"
+                step={0.1}
+                onChange={(value) => setPartial({ hydrationPercent: numberValue(value) })}
+              />
+              <Field
+                label={t.salt}
+                value={normalizedInput.saltPercent}
+                suffix="%"
+                step={0.1}
+                onChange={(value) => setPartial({ saltPercent: numberValue(value) })}
+              />
+              <Field
+                label={t.oil}
+                value={normalizedInput.oilPercent}
+                suffix="%"
+                hint={getEnrichmentHint("oil", settings.language, result)}
+                step={0.1}
+                onChange={(value) => setPartial({ oilPercent: numberValue(value) })}
+              />
+              <Field
+                label={t.sugar}
+                value={normalizedInput.sugarPercent}
+                suffix="%"
+                hint={getEnrichmentHint("sugar", settings.language, result)}
+                step={0.1}
+                onChange={(value) => setPartial({ sugarPercent: numberValue(value) })}
+              />
+              <Field
+                label={t.honey}
+                value={normalizedInput.honeyPercent}
+                suffix="%"
+                hint={getEnrichmentHint("honey", settings.language, result)}
+                step={0.1}
+                onChange={(value) => setPartial({ honeyPercent: numberValue(value) })}
+              />
+              <Field
+                label={t.malt}
+                value={normalizedInput.maltPercent}
+                suffix="%"
+                hint={getEnrichmentHint("malt", settings.language, result)}
+                step={0.1}
+                onChange={(value) => setPartial({ maltPercent: numberValue(value) })}
+              />
+              <Field
+                label={t.lard}
+                value={normalizedInput.lardPercent}
+                suffix="%"
+                hint={getEnrichmentHint("lard", settings.language, result)}
+                step={0.1}
+                onChange={(value) => setPartial({ lardPercent: numberValue(value) })}
+              />
+              <Field
+                label={t.milkPowder}
+                value={normalizedInput.milkPowderPercent}
+                suffix="%"
+                hint={getEnrichmentHint("milk-powder", settings.language, result)}
+                step={0.1}
+                onChange={(value) => setPartial({ milkPowderPercent: numberValue(value) })}
+              />
+            </div>
+            <div className="fieldGrid compact">
+              <SelectField
+                label={t.yeastType}
+                value={normalizedInput.yeastType}
+                onChange={(value) => setPartial({ yeastType: value as YeastType })}
+              >
+                {yeastOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </SelectField>
+              <SelectField
+                label={t.mixerType}
+                value={normalizedInput.mixerType}
+                onChange={(value) => setPartial({ mixerType: value as CalculatorInput["mixerType"] })}
+              >
+                <option value="hand">Hand</option>
+                <option value="planetary">Planetary</option>
+                <option value="spiral">Spiral</option>
+              </SelectField>
+              <Field
+                label={t.manualYeast}
+                value={normalizedInput.manualYeastPercent ?? ""}
+                suffix="%"
+                step={0.01}
+                onChange={(value) =>
+                  setPartial({ manualYeastPercent: value === "" ? undefined : numberValue(value) })
+                }
+              />
+              <Field
+                label={t.flourTemp}
+                value={displayTemperatureValue(
+                  normalizedInput.flourTempF ?? normalizedInput.fermentation.roomTempF,
+                  settings.temperatureUnit
+                )}
+                suffix={`\u00B0${settings.temperatureUnit}`}
+                onChange={(value) =>
+                  setPartial({
+                    flourTempF: parseTemperatureInput(
+                      value,
+                      settings.temperatureUnit,
+                      normalizedInput.fermentation.roomTempF
+                    )
+                  })
+                }
+              />
+            </div>
+          </section>
+
+          <section className="panel">
+            <PanelTitle icon={<CalendarClock size={18} />} label={t.fermentation} />
+            <div className="presetScroller">
+              {presetKeys.map((key) => (
+                <button
+                  className={preset === key ? "chip active" : "chip"}
+                  key={key}
+                  type="button"
+                  onClick={() => onPresetChange(key)}
+                >
+                  {getPresetLabel(key, settings.language)}
+                </button>
+              ))}
+            </div>
+            <div className="fermentGrid">
+              <FermentationStageCard
+                {...getFermentationStageContent("bulk", settings.language)}
+                durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
+                temperatureLabel={t.roomTemp}
+              >
+                <Field
+                  label={settings.language === "de" ? "Dauer" : "Hours"}
+                  value={normalizedInput.fermentation.roomTempHours}
+                  suffix="h"
+                  step={0.5}
+                  onChange={(value) => setFermentation({ roomTempHours: numberValue(value) })}
+                />
+                <Field
+                  label={t.roomTemp}
+                  value={displayTemperatureValue(normalizedInput.fermentation.roomTempF, settings.temperatureUnit)}
+                  suffix={`\u00B0${settings.temperatureUnit}`}
+                  onChange={(value) =>
+                    setFermentation({
+                      roomTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.roomTempF)
+                    })
+                  }
+                />
+              </FermentationStageCard>
+              <FermentationStageCard
+                {...getFermentationStageContent("temper", settings.language)}
+                durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
+                temperatureLabel={t.roomTemp}
+              >
+                <Field
+                  label={settings.language === "de" ? "Dauer" : "Hours"}
+                  value={normalizedInput.fermentation.finalRiseHours}
+                  suffix="h"
+                  step={0.5}
+                  onChange={(value) => setFermentation({ finalRiseHours: numberValue(value) })}
+                />
+                <Field
+                  label={t.roomTemp}
+                  value={displayTemperatureValue(normalizedInput.fermentation.roomTempF, settings.temperatureUnit)}
+                  suffix={`\u00B0${settings.temperatureUnit}`}
+                  onChange={(value) =>
+                    setFermentation({
+                      roomTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.roomTempF)
+                    })
+                  }
+                />
+              </FermentationStageCard>
+              <FermentationStageCard
+                {...getFermentationStageContent("cold-ball", settings.language)}
+                durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
+                temperatureLabel={t.fridgeTemp}
+              >
+                <Field
+                  label={settings.language === "de" ? "Dauer" : "Hours"}
+                  value={normalizedInput.fermentation.coldBallHours}
+                  suffix="h"
+                  step={0.5}
+                  onChange={(value) => setFermentation({ coldBallHours: numberValue(value) })}
+                />
+                <Field
+                  label={t.fridgeTemp}
+                  value={displayTemperatureValue(normalizedInput.fermentation.fridgeTempF, settings.temperatureUnit)}
+                  suffix={`\u00B0${settings.temperatureUnit}`}
+                  onChange={(value) =>
+                    setFermentation({
+                      fridgeTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.fridgeTempF)
+                    })
+                  }
+                />
+              </FermentationStageCard>
+              <FermentationStageCard
+                {...getFermentationStageContent("cold-bulk", settings.language)}
+                durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
+                temperatureLabel={t.fridgeTemp}
+              >
+                <Field
+                  label={settings.language === "de" ? "Dauer" : "Hours"}
+                  value={normalizedInput.fermentation.coldBulkHours}
+                  suffix="h"
+                  step={0.5}
+                  onChange={(value) => setFermentation({ coldBulkHours: numberValue(value) })}
+                />
+                <Field
+                  label={t.fridgeTemp}
+                  value={displayTemperatureValue(normalizedInput.fermentation.fridgeTempF, settings.temperatureUnit)}
+                  suffix={`\u00B0${settings.temperatureUnit}`}
+                  onChange={(value) =>
+                    setFermentation({
+                      fridgeTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.fridgeTempF)
+                    })
+                  }
+                />
+              </FermentationStageCard>
+              <FermentationStageCard
+                {...getFermentationStageContent("cellar", settings.language)}
+                durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
+                temperatureLabel={t.cellarTemp}
+              >
+                <Field
+                  label={settings.language === "de" ? "Dauer" : "Hours"}
+                  value={normalizedInput.fermentation.cellarTempHours}
+                  suffix="h"
+                  step={0.5}
+                  onChange={(value) => setFermentation({ cellarTempHours: numberValue(value) })}
+                />
+                <Field
+                  label={t.cellarTemp}
+                  value={displayTemperatureValue(normalizedInput.fermentation.cellarTempF, settings.temperatureUnit)}
+                  suffix={`\u00B0${settings.temperatureUnit}`}
+                  onChange={(value) =>
+                    setFermentation({
+                      cellarTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.cellarTempF)
+                    })
+                  }
+                />
+              </FermentationStageCard>
+            </div>
+          </section>
+
+          <section className="panel">
+            <PanelTitle icon={<FlaskConical size={18} />} label={t.doughStudio} />
+            <div className="fieldGrid compact">
+              <SelectField
+                label={t.prefermentMode}
+                value={prefermentMode}
+                onChange={(value) => setPreferment(getPrefermentPatch(value as PrefermentMode))}
+              >
+                <option value="none">{t.none}</option>
+                <option value="poolish">{t.poolish}</option>
+                <option value="biga">{t.biga}</option>
+                <option value="tiga">{t.tiga}</option>
+                <option value="bassinage">{t.bassinage}</option>
+              </SelectField>
+              <Toggle
+                checked={normalizedInput.flourBlendEnabled}
+                label={t.flourBlend}
+                hint={result.flourBlend.description}
+                onChange={(checked) => setPartial({ flourBlendEnabled: checked })}
+              />
+            </div>
+
+            {prefermentMode !== "none" ? (
+              <div className="fieldGrid">
+                <Field
+                  label={`${t.prefermentFlour} (${prefermentFlourGrams}g)`}
+                  value={normalizedInput.preferment.flourPercent}
+                  suffix="%"
+                  min={0}
+                  max={100}
+                  onChange={(value) => setPreferment({ flourPercent: numberValue(value, 30) })}
+                />
+                <Field
+                  label={t.bigaHydration}
+                  value={normalizedInput.preferment.bigaHydration}
+                  suffix="%"
+                  onChange={(value) => setPreferment({ bigaHydration: numberValue(value, 55) })}
+                />
+                <Field
+                  label={t.prefermentRoom}
+                  value={normalizedInput.preferment.roomHours}
+                  suffix="h"
+                  onChange={(value) => setPreferment({ roomHours: numberValue(value, 12) })}
+                />
+                <Field
+                  label={t.prefermentCold}
+                  value={normalizedInput.preferment.coldHours}
+                  suffix="h"
+                  onChange={(value) => setPreferment({ coldHours: numberValue(value) })}
+                />
+                <p className="sectionMeta fieldMeta">
+                  {normalizedInput.preferment.flourPercent}% = {prefermentFlourGrams}g {t.flour.toLowerCase()} {t.inPreferment}
+                </p>
+                <p className="sectionMeta fieldMeta">
+                  {t.mainDoughAdditions}: {mainDoughFlourGrams}g {t.additionalFlour}, {mainDoughWaterGrams}g {t.additionalWater},{" "}
+                  {mainDoughYeastGrams}g {t.additionalYeast}
+                </p>
+              </div>
+            ) : null}
+
+            {normalizedInput.flourBlendEnabled ? (
+              <div className="blendList">
+                <p className="sectionMeta">
+                  {t.blendTotal}: {blendTotal}%
+                </p>
+                {normalizedInput.flourBlend.map((item, index) => {
+                  const breakdown = blendBreakdown[index];
+
+                  return (
+                  <div className="blendRow" key={`${item.flourId}-${index}`}>
+                    <select value={item.flourId} onChange={(event) => setBlendItem(index, { flourId: event.target.value })}>
+                      {FLOURS.map((flour) => (
+                        <option key={flour.id} value={flour.id}>
+                          {flour.brand} {flour.name}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      value={item.percentage}
+                      min={0}
+                      max={100}
+                      onChange={(event) => setBlendItem(index, { percentage: numberValue(event.target.value) })}
+                    />
+                    <button
+                      className="iconButton"
+                      type="button"
+                      onClick={() => removeBlendItem(index)}
+                      aria-label="Remove flour"
+                    >
+                      x
+                    </button>
+                    {breakdown ? (
+                      <p className="sectionMeta blendMeta">
+                        {breakdown.totalGrams}g {t.totalLabel}
+                        {prefermentMode !== "none"
+                          ? `, ${breakdown.prefermentGrams}g ${prefermentName}, ${breakdown.mainDoughGrams}g ${t.mainDoughAdditions.toLowerCase()}`
+                          : ""}
+                      </p>
+                    ) : null}
+                  </div>
+                  );
+                })}
+                <button className="ghostButton" type="button" onClick={addBlendItem}>
+                  {t.addFlour}
+                </button>
+              </div>
+            ) : null}
+          </section>
+
+          <section className="panel">
+            <PanelTitle icon={<BookOpen size={18} />} label={t.sauce} />
+            <div className="fieldGrid compact">
+              <Toggle
+                checked={normalizedInput.sauce.enabled}
+                label={t.sauce}
+                hint={t.sauceHint}
+                onChange={(checked) => setSauce({ enabled: checked })}
+              />
+            </div>
+            {normalizedInput.sauce.enabled ? (
+              <>
+                <div className="fieldGrid compact">
+                  <Field
+                    label={t.sauceWeight}
+                    value={normalizedInput.sauce.gramsPerPizza}
+                    suffix="g"
+                    step={5}
+                    min={0}
+                    onChange={(value) => setSauce({ gramsPerPizza: numberValue(value, 90) })}
+                  />
+                  {!selectedSauceCollection ? (
+                    <SelectField
+                      label={t.sauceStyle}
+                      value={normalizedInput.sauce.style}
+                      onChange={(value) => setSauce({ style: value as CalculatorInput["sauce"]["style"] })}
+                    >
+                      <option value="classic">{t.sauceClassic}</option>
+                      <option value="raw">{t.sauceRaw}</option>
+                      <option value="cooked">{t.sauceCooked}</option>
+                      <option value="white">{t.sauceWhite}</option>
+                    </SelectField>
+                  ) : null}
+                </div>
+                {selectedSauceCollection ? (
+                  <>
+                    <Notice tone="notice">{selectedSauceCollection.saltWarning ?? SAUCE_SALT_WARNING}</Notice>
+                    <div className="sauceOptionGrid">
+                      {selectedSauceCollection.options.map((option) => (
+                        <button
+                          className={selectedSauceOption?.id === option.id ? "sauceOptionCard active" : "sauceOptionCard"}
+                          key={option.id}
+                          type="button"
+                          onClick={() =>
+                            setSauce({
+                              recipeId: option.id,
+                              style: inferSauceStyleFromOption(option)
+                            })
+                          }
+                        >
+                          <strong>{option.name}</strong>
+                          {option.description ? <span>{option.description}</span> : null}
+                          <small>{option.cookType}</small>
+                        </button>
+                      ))}
+                    </div>
+                    {selectedSauceOption ? (
+                      <div className="sauceDetailCard">
+                        <div className="sauceDetailHeader">
+                          <div>
+                            <strong>{selectedSauceOption.name}</strong>
+                            {selectedSauceOption.description ? <span>{selectedSauceOption.description}</span> : null}
+                          </div>
+                          <div className="sauceMeta">
+                            {selectedSauceOption.source ? (
+                              <span>
+                                {sauceUi.source}: {selectedSauceOption.source}
+                              </span>
+                            ) : null}
+                            {selectedSauceOption.yield ? (
+                              <span>
+                                {sauceUi.yield}: {selectedSauceOption.yield}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                        <div className="sauceDetailGrid">
+                          <div className="sauceDetailBlock">
+                            <h4>{sauceUi.ingredients}</h4>
+                            <ul className="detailList">
+                              {selectedSauceOption.ingredients.map((ingredient) => (
+                                <li key={`${selectedSauceOption.id}-${ingredient.item}`}>
+                                  <strong>{ingredient.item}</strong>
+                                  <span>
+                                    {ingredient.amount}
+                                    {ingredient.note ? ` - ${ingredient.note}` : ""}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div className="sauceDetailBlock">
+                            <h4>{sauceUi.instructions}</h4>
+                            <ol className="detailList ordered">
+                              {selectedSauceOption.instructions.map((instruction) => (
+                                <li key={`${selectedSauceOption.id}-${instruction}`}>{instruction}</li>
+                              ))}
+                            </ol>
+                          </div>
+                        </div>
+                        {selectedSauceOption.proTip ? (
+                          <Notice tone="ok">
+                            <strong>{sauceUi.proTip}:</strong> {selectedSauceOption.proTip}
+                          </Notice>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
+              </>
+            ) : null}
+          </section>
+
+          <section className="panel">
+            <PanelTitle icon={<Wheat size={18} />} label={t.bakeSurface} />
+            {usesPanGeometry ? (
+              <div className="fieldGrid">
+                <SelectField
+                  label={t.shape}
+                  value={normalizedInput.pan.shape}
+                  onChange={(value) => setPan({ shape: value as CalculatorInput["pan"]["shape"] })}
+                >
+                  <option value="rectangular">{t.rectangular}</option>
+                  <option value="round">{t.round}</option>
+                </SelectField>
+                {normalizedInput.pan.shape === "round" ? (
+                  <Field
+                    label={`${t.diameter} (${settings.sizeUnit === "in" ? t.inches : t.centimeters})`}
+                    value={normalizedInput.pan.diameter}
+                    suffix={getLengthSuffix(settings.sizeUnit)}
+                    onChange={(value) => setPan({ diameter: numberValue(value, 12) })}
+                  />
+                ) : (
+                  <>
+                    <Field
+                      label={`${t.length} (${settings.sizeUnit === "in" ? t.inches : t.centimeters})`}
+                      value={normalizedInput.pan.length}
+                      suffix={getLengthSuffix(settings.sizeUnit)}
+                      onChange={(value) => setPan({ length: numberValue(value, 10) })}
+                    />
+                    <Field
+                      label={`${t.width} (${settings.sizeUnit === "in" ? t.inches : t.centimeters})`}
+                      value={normalizedInput.pan.width}
+                      suffix={getLengthSuffix(settings.sizeUnit)}
+                      onChange={(value) => setPan({ width: numberValue(value, 14) })}
+                    />
+                  </>
+                )}
+                <Field
+                  label={`${t.depth} (${settings.sizeUnit === "in" ? t.inches : t.centimeters})`}
+                  value={normalizedInput.pan.depth}
+                  suffix={getLengthSuffix(settings.sizeUnit)}
+                  step={0.5}
+                  onChange={(value) => setPan({ depth: numberValue(value, 2) })}
+                />
+                <button className="actionButton alignEnd" type="button" onClick={applyPanWeight}>
+                  {t.applyPanWeight}
+                </button>
+              </div>
+            ) : (
+              <div className="sizePanel">
+                <p>{t.sizeHint}</p>
+                <div className="presetScroller">
+                  {sizePresetEntries.map((entry) => (
+                    <button
+                      className="chip"
+                      key={entry.sizeInches}
+                      type="button"
+                      onClick={() => applySizePreset(entry.sizeInches)}
+                    >
+                      {entry.label} = {entry.weight}g
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section className="panel">
+            <PanelTitle icon={<Flame size={18} />} label={t.ovenProfile} />
+            <Segmented value={normalizedInput.oven.type} options={ovenOptions} onChange={(value) => setOven({ type: value })} />
+            <div className="fieldGrid">
+              {normalizedInput.oven.type === "pizza-oven" ? (
+                <>
+                  <Field
+                    label={t.stoneTemp}
+                    value={displayTemperatureValue(normalizedInput.oven.pizzaOvenStoneTempF, settings.temperatureUnit)}
+                    suffix={`\u00B0${settings.temperatureUnit}`}
+                    onChange={(value) =>
+                      setOven({
+                        pizzaOvenStoneTempF: parseTemperatureInput(
+                          value,
+                          settings.temperatureUnit,
+                          normalizedInput.oven.pizzaOvenStoneTempF
+                        )
+                      })
+                    }
+                  />
+                  <Field
+                    label={t.topHeat}
+                    value={displayTemperatureValue(normalizedInput.oven.pizzaOvenTopTempF, settings.temperatureUnit)}
+                    suffix={`\u00B0${settings.temperatureUnit}`}
+                    onChange={(value) =>
+                      setOven({
+                        pizzaOvenTopTempF: parseTemperatureInput(
+                          value,
+                          settings.temperatureUnit,
+                          normalizedInput.oven.pizzaOvenTopTempF
+                        )
+                      })
+                    }
+                  />
+                </>
+              ) : null}
+              {normalizedInput.oven.type === "deck-oven" ? (
+                <Field
+                  label={t.deckTemp}
+                  value={displayTemperatureValue(normalizedInput.oven.deckOvenTempF, settings.temperatureUnit)}
+                  suffix={`\u00B0${settings.temperatureUnit}`}
+                  onChange={(value) =>
+                    setOven({
+                      deckOvenTempF: parseTemperatureInput(
+                        value,
+                        settings.temperatureUnit,
+                        normalizedInput.oven.deckOvenTempF
+                      )
+                    })
+                  }
+                />
+              ) : null}
+              {normalizedInput.oven.type === "steel-stone" ? (
+                <Toggle
+                  checked={normalizedInput.oven.useBroilerMethod}
+                  label={t.broilerFinish}
+                  onChange={(checked) => setOven({ useBroilerMethod: checked })}
+                />
+              ) : null}
+              {normalizedInput.oven.type === "conventional" ? (
+                <Toggle
+                  checked={normalizedInput.oven.useFinishingBroil}
+                  label={t.finishingBroil}
+                  onChange={(checked) => setOven({ useFinishingBroil: checked })}
+                />
+              ) : null}
+            </div>
+          </section>
+
+          <section className="panel">
+            <PanelTitle icon={<CalendarClock size={18} />} label={t.planner} />
+            <Segmented
+              value={planMode}
+              options={[
+                { value: "starting-now", label: t.today },
+                { value: "ready-by", label: t.readyBy }
+              ]}
+              onChange={(value) => setPlanMode(value)}
+            />
+            {planMode === "ready-by" ? (
+              <label className="field single">
+                <span>{t.readyDate}</span>
+                <input type="datetime-local" value={readyBy} onChange={(event) => setReadyBy(event.target.value)} />
+              </label>
+            ) : null}
+            <ol className="timeline">
+              {localizedPlan.map((step) => (
+                <li key={`${step.label}-${step.time.toISOString()}`}>
+                  <time>{formatDateTime(step.time.toISOString(), settings.language)}</time>
+                  <strong>{step.label}</strong>
+                  <span>{step.description}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
+        </div>
+
+        <aside className="resultStack">
+          <section className="panel recipeCard">
+            <PanelTitle icon={<Wheat size={18} />} label={t.formula} />
+            <div className="recipeHeader">
+              <div>
+                <p className="eyebrow">{activeStyle.origin}</p>
+                <h3>{recipeName || activeStyle.name}</h3>
+                <p className="sectionMeta">{activeStyle.flourType}</p>
+              </div>
+              <div className="buttonRow noPrint">
+                <button className="ghostButton" type="button" onClick={copyShareText}>
+                  <Share2 size={16} />
+                  {t.copy}
+                </button>
+                <button className="ghostButton" type="button" onClick={exportRecipe}>
+                  <Download size={16} />
+                  {t.export}
+                </button>
+                <button className="ghostButton" type="button" onClick={printRecipe}>
+                  <Printer size={16} />
+                  {t.print}
+                </button>
+              </div>
+            </div>
+
+            <div className="ingredientTable">
+              <Ingredient label={t.flour} value={`${result.ingredients.totalFlour}g`} pct="100%" />
+              <Ingredient
+                label={t.water}
+                value={`${result.ingredients.totalWater}g`}
+                pct={`${result.percentages.hydration}%`}
+                status={styleRange(result, "hydration", normalizedInput.hydrationPercent)}
+              />
+              <Ingredient
+                label={t.salt}
+                value={`${result.ingredients.totalSalt}g`}
+                pct={`${result.percentages.salt}%`}
+                status={styleRange(result, "salt", normalizedInput.saltPercent)}
+              />
+              <Ingredient label={t.yeast} value={`${result.ingredients.totalYeast}g`} pct={`${result.percentages.yeast}%`} />
+              {result.ingredients.totalOil > 0 ? (
+                <Ingredient
+                  label={t.oil}
+                  value={`${result.ingredients.totalOil}g`}
+                  pct={`${result.percentages.oil}%`}
+                  status={styleRange(result, "oil", normalizedInput.oilPercent)}
+                />
+              ) : null}
+              {result.ingredients.totalSugar > 0 ? (
+                <Ingredient
+                  label={t.sugar}
+                  value={`${result.ingredients.totalSugar}g`}
+                  pct={`${result.percentages.sugar}%`}
+                  status={styleRange(result, "sugar", normalizedInput.sugarPercent)}
+                />
+              ) : null}
+              {result.ingredients.totalHoney > 0 ? (
+                <Ingredient label={t.honey} value={`${result.ingredients.totalHoney}g`} pct={`${result.percentages.honey}%`} />
+              ) : null}
+              {result.ingredients.totalMalt > 0 ? (
+                <Ingredient label={t.malt} value={`${result.ingredients.totalMalt}g`} pct={`${result.percentages.malt}%`} />
+              ) : null}
+              {result.ingredients.totalLard > 0 ? (
+                <Ingredient label={t.lard} value={`${result.ingredients.totalLard}g`} pct={`${result.percentages.lard}%`} />
+              ) : null}
+              {result.ingredients.totalMilkPowder > 0 ? (
+                <Ingredient
+                  label={t.milkPowder}
+                  value={`${result.ingredients.totalMilkPowder}g`}
+                  pct={`${result.percentages.milkPowder}%`}
+                />
+              ) : null}
+            </div>
+
+            <div className="summaryGrid">
+              <Metric label={t.doughBalls} value={`${normalizedInput.doughBalls}`} />
+              <Metric label={t.ballWeight} value={`${normalizedInput.ballWeight}g`} />
+              <Metric label={t.waterTemp} value={formatTemperature(result.waterTemperature.waterTempF, settings.temperatureUnit)} />
+              <Metric label={t.bake} value={formatTemperature(result.oven.tempF, settings.temperatureUnit)} />
+            </div>
+
+            <div className="splitBox">
+              <strong>{waterSummary.title}</strong>
+              <span>{waterSummary.useText}</span>
+              <span>{waterSummary.targetText}</span>
+              {result.waterTemperature.note ? (
+                <span>{localizeWaterMessage(result.waterTemperature.note, settings.language)}</span>
+              ) : null}
+            </div>
+
+            {prefermentMode !== "none" ? (
+              <div className="splitBox">
+                <strong>{t.prefermentSplit}</strong>
+                <span>
+                  {prefermentName}: {normalizedInput.preferment.flourPercent}% = {prefermentFlourGrams}g {t.flour.toLowerCase()}, {result.ingredients.prefermentWater}g{" "}
+                  {t.water.toLowerCase()}, {result.ingredients.prefermentYeast}g {t.yeast.toLowerCase()}
+                </span>
+                <span>
+                  {t.mainDoughAdditions}: {mainDoughFlourGrams}g {t.additionalFlour}, {mainDoughWaterGrams}g {t.additionalWater},{" "}
+                  {mainDoughYeastGrams}g {t.additionalYeast}
+                </span>
+              </div>
+            ) : null}
+
+            {normalizedInput.flourBlendEnabled ? (
+              <div className="splitBox">
+                <strong>{t.flourBlend}</strong>
+                {blendBreakdown.map((item) => (
+                  <span key={`${item.flourId}-recipe`}>
+                    {item.flourLabel}: {item.totalGrams}g {t.totalLabel}
+                    {prefermentMode !== "none"
+                      ? `, ${item.prefermentGrams}g ${prefermentName}, ${item.mainDoughGrams}g ${t.mainDoughAdditions.toLowerCase()}`
+                      : ""}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
+            {result.sauce ? (
+              <div className="splitBox">
+                <strong>{t.sauce}</strong>
+                <span>
+                  {result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, t)}: {result.sauce.perPizzaGrams}g / pizza
+                </span>
+                <span>
+                  {settings.language === "de"
+                    ? `${result.sauce.totalGrams}g gesamt fuer den Batch`
+                    : `${result.sauce.totalGrams}g total for the batch`}
+                </span>
+                {selectedSauceOption?.source ? (
+                  <span>
+                    {sauceUi.source}: {selectedSauceOption.source}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+
+          <section className="panel printHide">
+            <PanelTitle icon={<Gauge size={18} />} label={t.recipeHealth} />
+            <div className="signalList">
+              {qualitySignals.map((signal) => (
+                <SignalRow key={signal.label} signal={signal} />
+              ))}
+            </div>
+          </section>
+
+          <section className="panel">
+            <PanelTitle icon={<AlertCircle size={18} />} label={t.guidance} />
+            <div className="guidanceGrid">
+              <Metric label={t.effectiveFerment} value={`${result.effectiveFermentationHours}h`} />
+              <Metric label={t.totalTime} value={`${result.totalFermentationHours}h`} />
+              <Metric label={t.waterTemp} value={formatTemperature(result.waterTemperature.waterTempF, settings.temperatureUnit)} />
+              <Metric label={t.targetFdt} value={formatTemperature(result.waterTemperature.targetFdtF, settings.temperatureUnit)} />
+              <Metric label={t.bake} value={formatTemperature(result.oven.tempF, settings.temperatureUnit)} />
+              <Metric
+                label={t.bakeTime}
+                value={`${result.oven.minTime}-${result.oven.maxTime} ${settings.language === "de" ? (result.oven.unit === "seconds" ? "Sek." : "Min.") : result.oven.unit}`}
+              />
+            </div>
+            {ovenDetail ? <Notice tone="notice">{ovenDetail}</Notice> : null}
+            {result.waterTemperature.warning ? (
+              <Notice tone="warning">{localizeWaterMessage(result.waterTemperature.warning, settings.language)}</Notice>
+            ) : null}
+            {result.waterTemperature.note ? (
+              <Notice tone="notice">{localizeWaterMessage(result.waterTemperature.note, settings.language)}</Notice>
+            ) : null}
+            {result.flourBlend.warning ? <Notice tone={result.flourBlend.warningColor}>{result.flourBlend.warning}</Notice> : null}
+            {result.pan ? (
+              <Notice tone="notice">
+                {t.panGeometry}: {formatArea(result.pan.areaSqIn, settings.sizeUnit)}, {t.depth.toLowerCase()} {normalizedInput.pan.depth}{getLengthSuffix(settings.sizeUnit)}
+              </Notice>
+            ) : null}
+          </section>
+
+          <section className="panel">
+            <PanelTitle
+              icon={<FlaskConical size={18} />}
+              label={t.method}
+              action={
+                <button
+                  className={`ghostButton ${copyMethodState === "copied" ? "successState" : copyMethodState === "failed" ? "errorState" : ""}`}
+                  type="button"
+                  onClick={copyMethodText}
+                >
+                  {copyMethodState === "copied" ? (
+                    <Check size={16} />
+                  ) : copyMethodState === "failed" ? (
+                    <AlertCircle size={16} />
+                  ) : (
+                    <CopyIcon size={16} />
+                  )}
+                  {copyMethodState === "copied"
+                    ? sauceUi.copyMethodCopied
+                    : copyMethodState === "failed"
+                      ? sauceUi.copyMethodFailed
+                      : sauceUi.copyMethod}
+                </button>
+              }
+            />
+            <ol className="methodList">
+              {methodSteps.map((instruction) => (
+                <li key={instruction}>{instruction}</li>
+              ))}
+            </ol>
+          </section>
+
+          <section className="panel noPrint">
+            <PanelTitle icon={<Calculator size={18} />} label={t.cost} />
+            <div className="fieldGrid">
+              <Field
+                label={t.flourCost}
+                value={costSettings.flourPerKg}
+                step={0.1}
+                onChange={(value) => setCostSettings((current) => ({ ...current, flourPerKg: numberValue(value) }))}
+              />
+              <Field
+                label={t.yeastCost}
+                value={costSettings.yeastPerKg}
+                step={0.1}
+                onChange={(value) => setCostSettings((current) => ({ ...current, yeastPerKg: numberValue(value) }))}
+              />
+              <Field
+                label={t.oilCost}
+                value={costSettings.oilPerKg}
+                step={0.1}
+                onChange={(value) => setCostSettings((current) => ({ ...current, oilPerKg: numberValue(value) }))}
+              />
+              <SelectField
+                label={t.currency}
+                value={costSettings.currency}
+                onChange={(value) => setCostSettings((current) => ({ ...current, currency: value }))}
+              >
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="GBP">GBP</option>
+                <option value="CAD">CAD</option>
+              </SelectField>
+            </div>
+            <div className="costTotal">
+              <span>{t.batch}</span>
+              <strong>{formatMoney(cost.total, cost.currency, settings.language)}</strong>
+              <span>{t.perDough}</span>
+              <strong>{formatMoney(cost.perBall, cost.currency, settings.language)}</strong>
+            </div>
+          </section>
+
+          <section className="panel noPrint">
+            <PanelTitle icon={<Save size={18} />} label={t.savedRecipes} />
+            <div className="saveRow">
+              <input value={recipeName} onChange={(event) => setRecipeName(event.target.value)} placeholder={t.recipeName} />
+              <button className="actionButton" type="button" onClick={saveRecipe}>
+                <Save size={16} />
+                {t.save}
+              </button>
+            </div>
+            <p className="sectionMeta">
+              {savedRecipes.length} {t.savedCount}
+            </p>
+            <div className="savedList scrollArea">
+              {savedRecipes.map((recipe) => (
+                <button className="savedItem" key={recipe.id} type="button" onClick={() => loadSavedRecipe(recipe)}>
+                  <strong>{recipe.name}</strong>
+                  <span>{formatDateTime(recipe.createdAt, settings.language)}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="panel noPrint">
+            <PanelTitle icon={<ClipboardList size={18} />} label={t.bakeJournal} />
+            <div className="fieldGrid compact">
+              <Field
+                label={t.rating}
+                value={logDraft.rating}
+                min={1}
+                max={5}
+                onChange={(value) => setLogDraft((current) => ({ ...current, rating: numberValue(value, 5) }))}
+              />
+              <SelectField
+                label={t.outcome}
+                value={logDraft.outcome}
+                onChange={(value) => setLogDraft((current) => ({ ...current, outcome: value as BakeLogEntry["outcome"] }))}
+              >
+                <option value="keeper">{t.keeper}</option>
+                <option value="tweak">{t.tweak}</option>
+                <option value="fail">{t.fail}</option>
+              </SelectField>
+            </div>
+            <div className="photoRow">
+              <label className="ghostButton fileButton">
+                <input type="file" accept="image/*" onChange={onBakePhotoChange} />
+                {t.addPhoto}
+              </label>
+              {logDraft.photoDataUrl ? (
+                <button
+                  className="ghostButton"
+                  type="button"
+                  onClick={() => setLogDraft((current) => ({ ...current, photoDataUrl: undefined, photoName: undefined }))}
+                >
+                  {t.removePhoto}
+                </button>
+              ) : null}
+            </div>
+            {logDraft.photoDataUrl ? (
+              <div className="photoPreview">
+                <img src={logDraft.photoDataUrl} alt={logDraft.photoName ?? "Bake preview"} />
+                <span>{logDraft.photoName}</span>
+              </div>
+            ) : (
+              <p className="sectionMeta">{t.noPhoto}</p>
+            )}
+            <textarea
+              value={logDraft.notes}
+              onChange={(event) => setLogDraft((current) => ({ ...current, notes: event.target.value }))}
+              placeholder={t.notesPlaceholder}
+            />
+            <button className="actionButton fullWidth" type="button" onClick={addBakeLog}>
+              {t.logBake}
+            </button>
+            <p className="sectionMeta">
+              {bakeLog.length} {t.journalCount}
+            </p>
+            <div className="savedList scrollArea">
+              {bakeLog.map((entry) => (
+                <div className="savedItem staticItem" key={entry.id}>
+                  <strong>{entry.recipeName}</strong>
+                  <span>
+                    {entry.rating}/5, {t[entry.outcome]}, {formatDateTime(entry.date, settings.language)}
+                  </span>
+                  {entry.photoDataUrl ? (
+                    <img className="journalImage" src={entry.photoDataUrl} alt={entry.photoName ?? entry.recipeName} />
+                  ) : null}
+                  {entry.notes ? <p>{entry.notes}</p> : null}
+                </div>
+              ))}
+            </div>
+          </section>
+        </aside>
+      </div>
+      <section className="printSheet">
+        <div className="printSheetHeader">
+          <p className="printKicker">{waterSummary.useText}</p>
+          <div className="printTitleRow">
+            <div>
+              <p className="eyebrow">{activeStyle.origin}</p>
+              <h2>{recipeName || activeStyle.name}</h2>
+              <p className="printSubtitle">
+                {activeStyle.name} · {activeStyle.flourType} · {normalizedInput.doughBalls} x {normalizedInput.ballWeight}g
+              </p>
+            </div>
+            <div className="printMetricRow">
+              <div>
+                <span>{t.flour}</span>
+                <strong>{result.ingredients.totalFlour}g</strong>
+              </div>
+              <div>
+                <span>{t.water}</span>
+                <strong>{result.ingredients.totalWater}g</strong>
+              </div>
+              <div>
+                <span>{t.waterTemp}</span>
+                <strong>{formatTemperature(result.waterTemperature.waterTempF, settings.temperatureUnit)}</strong>
+              </div>
+              <div>
+                <span>{t.bake}</span>
+                <strong>{formatTemperature(result.oven.tempF, settings.temperatureUnit)}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {normalizedInput.flourBlendEnabled ? (
+          <section className="printSection">
+            <h3>{t.flourBlend}</h3>
+            <ul className="printBulletList">
+              {blendBreakdown.map((item) => (
+                <li key={`${item.flourId}-print`}>
+                  <strong>{item.flourLabel}</strong>: {item.percentage}% · {item.totalGrams}g
+                  {prefermentMode !== "none"
+                    ? ` · ${item.prefermentGrams}g ${prefermentName} · ${item.mainDoughGrams}g ${t.mainDoughAdditions.toLowerCase()}`
+                    : ""}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        <section className="printSection">
+          <h3>{sauceUi.ingredients}</h3>
+          <div className="printIngredients">
+            <div className="printIngredientRow">
+              <span>{t.flour}</span>
+              <strong>{result.ingredients.totalFlour}g</strong>
+              <em>100%</em>
+            </div>
+            <div className="printIngredientRow">
+              <span>{t.water}</span>
+              <strong>{result.ingredients.totalWater}g</strong>
+              <em>{result.percentages.hydration}%</em>
+            </div>
+            <div className="printIngredientRow">
+              <span>{t.salt}</span>
+              <strong>{result.ingredients.totalSalt}g</strong>
+              <em>{result.percentages.salt}%</em>
+            </div>
+            <div className="printIngredientRow">
+              <span>{t.yeast}</span>
+              <strong>{result.ingredients.totalYeast}g</strong>
+              <em>{result.percentages.yeast}%</em>
+            </div>
+            {result.ingredients.totalOil > 0 ? (
+              <div className="printIngredientRow">
+                <span>{t.oil}</span>
+                <strong>{result.ingredients.totalOil}g</strong>
+                <em>{result.percentages.oil}%</em>
+              </div>
+            ) : null}
+            {result.ingredients.totalSugar > 0 ? (
+              <div className="printIngredientRow">
+                <span>{t.sugar}</span>
+                <strong>{result.ingredients.totalSugar}g</strong>
+                <em>{result.percentages.sugar}%</em>
+              </div>
+            ) : null}
+            {result.ingredients.totalHoney > 0 ? (
+              <div className="printIngredientRow">
+                <span>{t.honey}</span>
+                <strong>{result.ingredients.totalHoney}g</strong>
+                <em>{result.percentages.honey}%</em>
+              </div>
+            ) : null}
+            {result.ingredients.totalMalt > 0 ? (
+              <div className="printIngredientRow">
+                <span>{t.malt}</span>
+                <strong>{result.ingredients.totalMalt}g</strong>
+                <em>{result.percentages.malt}%</em>
+              </div>
+            ) : null}
+            {result.ingredients.totalLard > 0 ? (
+              <div className="printIngredientRow">
+                <span>{t.lard}</span>
+                <strong>{result.ingredients.totalLard}g</strong>
+                <em>{result.percentages.lard}%</em>
+              </div>
+            ) : null}
+            {result.ingredients.totalMilkPowder > 0 ? (
+              <div className="printIngredientRow">
+                <span>{t.milkPowder}</span>
+                <strong>{result.ingredients.totalMilkPowder}g</strong>
+                <em>{result.percentages.milkPowder}%</em>
+              </div>
+            ) : null}
+          </div>
+          {prefermentMode !== "none" ? (
+            <div className="printCallout">
+              <strong>{t.prefermentSplit}</strong>
+              <span>
+                {prefermentName}: {normalizedInput.preferment.flourPercent}% = {prefermentFlourGrams}g {t.flour.toLowerCase()}, {result.ingredients.prefermentWater}g{" "}
+                {t.water.toLowerCase()}, {result.ingredients.prefermentYeast}g {t.yeast.toLowerCase()}
+              </span>
+              <span>
+                {t.mainDoughAdditions}: {mainDoughFlourGrams}g {t.additionalFlour}, {mainDoughWaterGrams}g {t.additionalWater}, {mainDoughYeastGrams}g{" "}
+                {t.additionalYeast}
+              </span>
+            </div>
+          ) : null}
+        </section>
+
+        <section className="printSection">
+          <h3>{t.fermentation}</h3>
+          <div className="printFermentGrid">
+            {[
+              {
+                key: "bulk" as const,
+                hours: normalizedInput.fermentation.roomTempHours,
+                tempF: normalizedInput.fermentation.roomTempF
+              },
+              {
+                key: "temper" as const,
+                hours: normalizedInput.fermentation.finalRiseHours,
+                tempF: normalizedInput.fermentation.roomTempF
+              },
+              {
+                key: "cold-ball" as const,
+                hours: normalizedInput.fermentation.coldBallHours,
+                tempF: normalizedInput.fermentation.fridgeTempF
+              },
+              {
+                key: "cold-bulk" as const,
+                hours: normalizedInput.fermentation.coldBulkHours,
+                tempF: normalizedInput.fermentation.fridgeTempF
+              },
+              {
+                key: "cellar" as const,
+                hours: normalizedInput.fermentation.cellarTempHours,
+                tempF: normalizedInput.fermentation.cellarTempF
+              }
+            ].map((stage) => {
+              const content = getFermentationStageContent(stage.key, settings.language);
+              return (
+                <div className="printFermentCard" key={stage.key}>
+                  <strong>{content.title}</strong>
+                  <span>{content.subtitle}</span>
+                  <b>
+                    {stage.hours}h @ {formatTemperature(stage.tempF, settings.temperatureUnit)}
+                  </b>
+                  {content.note ? <p>{content.note}</p> : null}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="printSection printColumns">
+          <div>
+            <h3>{waterSummary.title}</h3>
+            <p>{waterSummary.useText}</p>
+            <p>{waterSummary.targetText}</p>
+            {result.waterTemperature.warning ? <p>{localizeWaterMessage(result.waterTemperature.warning, settings.language)}</p> : null}
+          </div>
+          <div>
+            <h3>{t.bake}</h3>
+            <p>{formatBakeWindow(result.oven, settings.language, settings.temperatureUnit, ovenDetail)}</p>
+            {result.pan ? (
+              <p>
+                {t.panGeometry}: {formatArea(result.pan.areaSqIn, settings.sizeUnit)}, {t.depth.toLowerCase()} {normalizedInput.pan.depth}
+                {getLengthSuffix(settings.sizeUnit)}
+              </p>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="printSection">
+          <h3>{t.method}</h3>
+          <ol className="printMethodList">
+            {methodSteps.map((instruction) => (
+              <li key={`print-${instruction}`}>{instruction}</li>
+            ))}
+          </ol>
+        </section>
+
+        {selectedSauceOption && result.sauce ? (
+          <section className="printSection">
+            <h3>
+              {t.sauce}: {selectedSauceOption.name}
+            </h3>
+            <p className="printSauceMeta">
+              {result.sauce.perPizzaGrams}g / pizza · {result.sauce.totalGrams}g total
+              {selectedSauceOption.source ? ` · ${sauceUi.source}: ${selectedSauceOption.source}` : ""}
+              {selectedSauceOption.yield ? ` · ${sauceUi.yield}: ${selectedSauceOption.yield}` : ""}
+            </p>
+            <p className="printSauceWarning">{selectedSauceCollection?.saltWarning ?? SAUCE_SALT_WARNING}</p>
+            <div className="printColumns">
+              <div>
+                <h4>{sauceUi.ingredients}</h4>
+                <ul className="printBulletList">
+                  {selectedSauceOption.ingredients.map((ingredient) => (
+                    <li key={`print-sauce-${ingredient.item}`}>
+                      <strong>{ingredient.item}</strong>: {ingredient.amount}
+                      {ingredient.note ? ` - ${ingredient.note}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <h4>{sauceUi.instructions}</h4>
+                <ol className="printMethodList compact">
+                  {selectedSauceOption.instructions.map((instruction) => (
+                    <li key={`print-sauce-step-${instruction}`}>{instruction}</li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+            {selectedSauceOption.proTip ? (
+              <div className="printCallout">
+                <strong>{sauceUi.proTip}</strong>
+                <span>{selectedSauceOption.proTip}</span>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        <footer className="printFooter">
+          {sauceUi.madeWith} · v{APP_VERSION} · GPL-3.0
+        </footer>
+      </section>
+    </main>
+  );
+}
+
+function PanelTitle({ icon, label, action }: { icon: ReactNode; label: string; action?: ReactNode }) {
+  return (
+    <div className="panelTitle">
+      <span>
+        {icon}
+        {label}
+      </span>
+      {action ? <div className="panelAction noPrint">{action}</div> : null}
+    </div>
+  );
+}
+
+function FermentationStageCard({
+  title,
+  subtitle,
+  note,
+  children
+}: {
+  title: string;
+  subtitle: string;
+  note?: string;
+  durationLabel?: string;
+  temperatureLabel?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="fermentCard">
+      <div className="fermentCardHeader">
+        <strong>{title}</strong>
+        <span>({subtitle})</span>
+      </div>
+      <div className="fermentCardFields">{children}</div>
+      {note ? <p className="fermentCardNote">{note}</p> : null}
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function Ingredient({
+  label,
+  value,
+  pct,
+  status = "ok"
+}: {
+  label: string;
+  value: string;
+  pct: string;
+  status?: "ok" | "danger";
+}) {
+  return (
+    <div className={`ingredient ${status}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <em>{pct}</em>
+    </div>
+  );
+}
+
+function SignalRow({ signal }: { signal: QualitySignal }) {
+  return (
+    <div className={`signalRow ${signal.tone}`}>
+      <div className="signalHeader">
+        <strong>{signal.label}</strong>
+        <span>{signal.value}</span>
+      </div>
+      <div className="signalTrack" aria-hidden="true">
+        <div style={{ width: `${signal.score}%` }} />
+      </div>
+      <p>{signal.note}</p>
+    </div>
+  );
+}
+
+function Notice({ children, tone }: { children: ReactNode; tone: "ok" | "notice" | "warning" | "danger" }) {
+  return <p className={`notice ${tone}`}>{children}</p>;
+}
+
+

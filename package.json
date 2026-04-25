@@ -1,0 +1,27 @@
+{
+  "name": "pizza-geek",
+  "version": "0.2.0",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm --prefix apps/web run dev",
+    "build": "npm run build -w packages/core && npm run build -w apps/web",
+    "test": "vitest run",
+    "typecheck": "npm run typecheck -w packages/core && npm run typecheck -w apps/web"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.0.4",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.10",
+    "vitest": "^3.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3"
+  }
+}

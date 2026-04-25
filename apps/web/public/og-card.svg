@@ -1,0 +1,43 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#131416"/>
+  <rect x="28" y="28" width="1144" height="574" rx="36" fill="url(#bg)"/>
+  <rect x="54" y="54" width="1092" height="522" rx="28" stroke="#F6ECDD" stroke-opacity="0.12" stroke-width="2"/>
+  <circle cx="258" cy="316" r="146" fill="#B65428"/>
+  <circle cx="258" cy="316" r="118" fill="#F2C37A"/>
+  <circle cx="258" cy="316" r="111" stroke="#F6ECDD" stroke-opacity="0.5" stroke-width="4"/>
+  <path d="M258 205V427" stroke="#7F2F1A" stroke-width="12" stroke-linecap="round"/>
+  <path d="M147 316H369" stroke="#7F2F1A" stroke-width="12" stroke-linecap="round"/>
+  <path d="M180 238L336 394" stroke="#7F2F1A" stroke-width="12" stroke-linecap="round"/>
+  <path d="M336 238L180 394" stroke="#7F2F1A" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="258" cy="316" r="25" fill="#F6ECDD"/>
+  <circle cx="219" cy="264" r="14" fill="#C95530"/>
+  <circle cx="309" cy="277" r="14" fill="#C95530"/>
+  <circle cx="202" cy="352" r="13" fill="#4F7B3C"/>
+  <circle cx="297" cy="367" r="16" fill="#4F7B3C"/>
+  <path d="M356 160L372 144" stroke="#F6ECDD" stroke-width="10" stroke-linecap="round"/>
+  <path d="M380 168H402" stroke="#F6ECDD" stroke-width="10" stroke-linecap="round"/>
+  <path d="M388 193L404 209" stroke="#F6ECDD" stroke-width="10" stroke-linecap="round"/>
+  <text x="468" y="222" fill="#F7F3EA" font-family="Manrope, Arial, sans-serif" font-size="28" font-weight="700" letter-spacing="1.6">PIZZA GEEK</text>
+  <text x="468" y="304" fill="#F7F3EA" font-family="Fraunces, Georgia, serif" font-size="88" font-weight="700">Dough Calculator</text>
+  <text x="468" y="360" fill="#D7D2C8" font-family="Manrope, Arial, sans-serif" font-size="28" font-weight="500">
+    Style-aware dough math, preferments, flour blending,
+  </text>
+  <text x="468" y="399" fill="#D7D2C8" font-family="Manrope, Arial, sans-serif" font-size="28" font-weight="500">
+    oven tuning, bake logging, and plan-ahead scheduling.
+  </text>
+  <g>
+    <rect x="468" y="460" width="164" height="42" rx="21" fill="#F6ECDD" fill-opacity="0.1" stroke="#F6ECDD" stroke-opacity="0.22"/>
+    <text x="500" y="488" fill="#F7F3EA" font-family="Manrope, Arial, sans-serif" font-size="18" font-weight="700">Preferments</text>
+    <rect x="648" y="460" width="170" height="42" rx="21" fill="#F6ECDD" fill-opacity="0.1" stroke="#F6ECDD" stroke-opacity="0.22"/>
+    <text x="681" y="488" fill="#F7F3EA" font-family="Manrope, Arial, sans-serif" font-size="18" font-weight="700">Flour Blends</text>
+    <rect x="834" y="460" width="182" height="42" rx="21" fill="#F6ECDD" fill-opacity="0.1" stroke="#F6ECDD" stroke-opacity="0.22"/>
+    <text x="865" y="488" fill="#F7F3EA" font-family="Manrope, Arial, sans-serif" font-size="18" font-weight="700">Bake Planner</text>
+  </g>
+  <defs>
+    <linearGradient id="bg" x1="80" y1="84" x2="1118" y2="562" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1D1F23"/>
+      <stop offset="0.5" stop-color="#141517"/>
+      <stop offset="1" stop-color="#1B1A17"/>
+    </linearGradient>
+  </defs>
+</svg>

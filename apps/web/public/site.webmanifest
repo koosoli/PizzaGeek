@@ -1,0 +1,16 @@
+{
+  "name": "Pizza Geek",
+  "short_name": "Pizza Geek",
+  "description": "A style-aware pizza dough calculator with fermentation planning, flour blending, and bake logging.",
+  "theme_color": "#171717",
+  "background_color": "#12131a",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
