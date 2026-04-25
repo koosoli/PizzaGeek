@@ -545,6 +545,7 @@ textarea {
   border-radius: 14px;
   background: var(--surface);
   color: var(--ink);
+  text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -577,6 +578,18 @@ textarea {
 
 .ghostButton {
   color: var(--ink);
+}
+
+.supportButton {
+  min-height: 38px;
+  padding: 8px 12px;
+  border-color: rgba(255, 221, 0, 0.18);
+  background: rgba(255, 221, 0, 0.08);
+  font-size: 13px;
+}
+
+.supportButton:hover {
+  border-color: rgba(255, 221, 0, 0.34);
 }
 
 .ghostButton.successState {

@@ -1,5 +1,9 @@
 # Pizza Geek
 
+[![Live Demo](https://img.shields.io/badge/GitHub%20Pages-Try%20Pizza%20Geek-c45a2b?style=for-the-badge&logo=githubpages&logoColor=white)](https://koosoli.github.io/PizzaGeek/)
+[![Sponsor on GitHub](https://img.shields.io/badge/GitHub%20Sponsors-Sponsor-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/koosoli)
+[![Buy Me a Slice](https://img.shields.io/badge/Buy%20Me%20a%20Slice-Support-ffdd00?style=for-the-badge&logo=buymeacoffee&logoColor=000000)](https://buymeacoffee.com/koosoli)
+
 Pizza Geek is an open-source spin on the famous Pizza Nerd calculator: no paywall, no locked lab tier, and no pretending it should stay a clone forever. It started as an experiment in how well AI can reverse-engineer a polished product, and it kept going because good tools deserve an open community around them.
 
 From here on out, Pizza Geek heads in its own direction.
@@ -45,6 +49,12 @@ That split is intentional: a future `apps/mobile` client can reuse the same calc
 Current release: `v0.2.0`
 
 See [CHANGELOG.md](./CHANGELOG.md) for the first public open-source release notes.
+
+## Support The Project
+
+- Try the live app: [koosoli.github.io/PizzaGeek](https://koosoli.github.io/PizzaGeek/)
+- Sponsor on GitHub: [github.com/sponsors/koosoli](https://github.com/sponsors/koosoli)
+- Buy me a coffee, or better, a slice: [buymeacoffee.com/koosoli](https://buymeacoffee.com/koosoli)
 
 ## License
 

@@ -5,6 +5,7 @@
   CalendarClock,
   Check,
   ClipboardList,
+  Coffee,
   Copy as CopyIcon,
   Download,
   Flame,
@@ -100,6 +101,7 @@ type BlendBreakdownRow = {
 const BRAND_NAME = "Pizza Geek";
 const APP_VERSION = __APP_VERSION__;
 const BRAND_LOGO_SRC = `${import.meta.env.BASE_URL}favicon.svg`;
+const BUY_ME_A_SLICE_URL = "https://buymeacoffee.com/koosoli";
 const STORAGE_KEYS = {
   settings: "pizza-geek.settings",
   input: "pizza-geek.input",
@@ -123,6 +125,7 @@ const copy = {
       "Style-aware dough math for serious home and pro pizza making, with clearer planning, better bake guidance, and a much stronger recipe workflow.",
     resetStyle: "Reset style",
     printRecipe: "Print sheet",
+    buySlice: "Buy a slice",
     settings: "Settings",
     theme: "Theme",
     language: "Language",
@@ -268,6 +271,7 @@ const copy = {
       "Stilbewusste Teigberechnung fur ambitionierte Home- und Profi-Pizza, mit klarerer Planung, besserer Backfuhrung und einem deutlich starkeren Rezept-Workflow.",
     resetStyle: "Stil zurucksetzen",
     printRecipe: "Rezept drucken",
+    buySlice: "Pizza spendieren",
     settings: "Einstellungen",
     theme: "Thema",
     language: "Sprache",
@@ -1800,6 +1804,10 @@ export function App() {
           </div>
         </div>
         <div className="headerActions noPrint">
+          <a className="ghostButton supportButton" href={BUY_ME_A_SLICE_URL} target="_blank" rel="noreferrer">
+            <Coffee size={16} />
+            {t.buySlice}
+          </a>
           <button className="ghostButton" type="button" onClick={printRecipe}>
             <Printer size={16} />
             {t.printRecipe}
