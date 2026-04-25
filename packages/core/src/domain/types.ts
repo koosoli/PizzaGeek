@@ -51,6 +51,8 @@ export interface RangePreset {
 export interface PizzaStyle {
   id: string;
   name: string;
+  parentStyleId?: string;
+  variantLabel?: string;
   origin: string;
   flourType: string;
   profile: string;

@@ -108,6 +108,7 @@ export function scheduleFromPreset(
 
 export function choosePresetForStyle(styleId: string): FermentationPresetKey {
   const style = getStyleById(styleId) ?? PIZZA_STYLES[0];
+  if (style.id === STYLE_IDS.CONTEMPORARY_NEAPOLITAN_DOUBLE_PREFERMENT_WHOLE_GRAIN) return "overnight";
   if (style.coldFermentRecommended) {
     if (style.fermentationHours.recommended >= 70) return "threeDay";
     if (style.fermentationHours.recommended >= 48) return "twoDay";
@@ -182,7 +183,11 @@ export function defaultSauceOptions(styleId = PIZZA_STYLES[0].id): SauceOptions 
     };
   }
 
-  if (style.id === STYLE_IDS.NEAPOLITAN || style.id === STYLE_IDS.CONTEMPORARY_NEAPOLITAN) {
+  if (
+    style.id === STYLE_IDS.NEAPOLITAN ||
+    style.id === STYLE_IDS.CONTEMPORARY_NEAPOLITAN ||
+    style.id === STYLE_IDS.CONTEMPORARY_NEAPOLITAN_DOUBLE_PREFERMENT_WHOLE_GRAIN
+  ) {
     return {
       enabled: true,
       style: "raw",
@@ -212,8 +217,7 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
   const style = getStyleById(styleId) ?? PIZZA_STYLES[0];
   const preset = choosePresetForStyle(style.id);
   const hideEnrichments = HIDE_OIL_SUGAR_STYLES.has(style.name);
-
-  return {
+  const baseInput: CalculatorInput = {
     styleId: style.id,
     doughBalls: style.defaultBallCount,
     ballWeight: style.defaultBallWeight,
@@ -235,4 +239,40 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
     oven: defaultOvenOptions(style.defaultOven),
     sauce: defaultSauceOptions(style.id)
   };
+
+  if (style.id === STYLE_IDS.CONTEMPORARY_NEAPOLITAN_DOUBLE_PREFERMENT_WHOLE_GRAIN) {
+    return {
+      ...baseInput,
+      hydrationPercent: 75,
+      saltPercent: 3,
+      oilPercent: 0,
+      sugarPercent: 0,
+      doughBalls: 7,
+      ballWeight: 255,
+      yeastType: "fresh",
+      manualYeastPercent: 0.9,
+      fermentation: {
+        roomTempHours: 0,
+        cellarTempHours: 0,
+        coldBulkHours: 0,
+        coldBallHours: 14,
+        finalRiseHours: 1,
+        roomTempF: 72,
+        cellarTempF: 55,
+        fridgeTempF: 39
+      },
+      flourBlendEnabled: true,
+      flourBlend: [
+        { flourId: "caputo-nuvola", percentage: 90 },
+        { flourId: "whole-wheat", percentage: 10 }
+      ],
+      oven: {
+        ...defaultOvenOptions(style.defaultOven),
+        pizzaOvenStoneTempF: 800,
+        pizzaOvenTopTempF: 900
+      }
+    };
+  }
+
+  return baseInput;
 }

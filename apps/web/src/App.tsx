@@ -45,6 +45,7 @@ import {
   type FermentationPresetKey,
   type FlourBlendItem,
   type OvenType,
+  type PizzaStyle,
   type SauceRecipeOption,
   type SizeUnit,
   type TemperatureUnit,
@@ -99,7 +100,23 @@ type BlendBreakdownRow = {
   mainDoughGrams: number;
 };
 
-type PanelKey = "settings" | "styles" | "planner" | "quality" | "cost" | "saved" | "journal";
+type PanelKey =
+  | "settings"
+  | "styles"
+  | "doughSetup"
+  | "fermentation"
+  | "doughStudio"
+  | "sauce"
+  | "bakeSurface"
+  | "ovenProfile"
+  | "planner"
+  | "formula"
+  | "quality"
+  | "guidance"
+  | "method"
+  | "cost"
+  | "saved"
+  | "journal";
 
 const BRAND_NAME = "Pizza Geek";
 const APP_VERSION = __APP_VERSION__;
@@ -121,10 +138,19 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 const DEFAULT_PANEL_STATE: Record<PanelKey, boolean> = {
-  settings: false,
-  styles: false,
+  settings: true,
+  styles: true,
+  doughSetup: false,
+  fermentation: true,
+  doughStudio: false,
+  sauce: false,
+  bakeSurface: true,
+  ovenProfile: true,
   planner: false,
+  formula: true,
   quality: false,
+  guidance: true,
+  method: true,
   cost: false,
   saved: false,
   journal: false
@@ -153,6 +179,11 @@ function isAutoRecipeName(name: string, styleId: string) {
 function getRecipeDisplayName(recipeName: string, styleId: string, locale: LocaleCode) {
   return recipeName.trim() || getDefaultRecipeName(styleId, locale);
 }
+
+type StyleGroup = {
+  parent: PizzaStyle;
+  variants: PizzaStyle[];
+};
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
   try {
@@ -219,6 +250,7 @@ const copy = {
     sizeUnit: "Length unit",
     english: "English",
     german: "Deutsch",
+    variants: "Variants",
     dark: "Dark",
     light: "Light",
     fahrenheit: "Fahrenheit",
@@ -369,6 +401,7 @@ const copy = {
     sizeUnit: "Laengeneinheit",
     english: "Englisch",
     german: "Deutsch",
+    variants: "Varianten",
     dark: "Dunkel",
     light: "Hell",
     fahrenheit: "Fahrenheit",
@@ -529,6 +562,7 @@ const sizePresets: Record<string, Record<number, number>> = {
   default: { 10: 180, 12: 250, 14: 320, 16: 400, 18: 500 },
   Neapolitan: { 10: 220, 12: 250, 14: 300, 16: 420, 18: 550 },
   "Contemporary Neapolitan": { 10: 240, 12: 270, 14: 340, 16: 450, 18: 580 },
+  "Contemporary Neapolitan - Double Preferment Whole Grain": { 10: 230, 12: 255, 14: 330, 16: 440, 18: 570 },
   "New Haven": { 10: 220, 12: 260, 14: 320, 16: 420, 18: 550 },
   "Pizza alla Pala": { 10: 280, 12: 350, 14: 450, 16: 550, 18: 700 },
   "New York": { 10: 240, 12: 300, 14: 360, 16: 460, 18: 580 },
@@ -1592,6 +1626,13 @@ export function App() {
   const mainDoughWaterGrams = prefermentMode === "none" ? 0 : (result.ingredients.mainWater ?? 0);
   const mainDoughYeastGrams = prefermentMode === "none" ? 0 : (result.ingredients.mainYeast ?? 0);
   const activeStyle = result.style;
+  const styleGroups = useMemo<StyleGroup[]>(() => {
+    const primaryStyles = PIZZA_STYLES.filter((style) => !style.parentStyleId);
+    return primaryStyles.map((parent) => ({
+      parent,
+      variants: PIZZA_STYLES.filter((style) => style.parentStyleId === parent.id)
+    }));
+  }, []);
   const usesPanGeometry = Boolean(activeStyle.panStyle);
   const cost = useMemo(
     () => calculateCost(result, resolvedCostSettings, normalizedInput.doughBalls),
@@ -1606,19 +1647,52 @@ export function App() {
     () => ({
       settings: `${settings.language === "de" ? t.german : t.english} · °${settings.temperatureUnit} · ${settings.sizeUnit === "in" ? t.inches : t.centimeters} · ${settings.theme === "dark" ? t.dark : t.light}`,
       styles: `${activeStyle.name} · ${activeStyle.origin}`,
+      doughSetup: `${normalizedInput.doughBalls} x ${normalizedInput.ballWeight}g · ${normalizedInput.hydrationPercent}% ${t.hydration.toLowerCase()}`,
+      fermentation: `${getPresetLabel(preset, settings.language)} · ${result.totalFermentationHours}h ${t.totalTime.toLowerCase()}`,
+      doughStudio: normalizedInput.flourBlendEnabled ? `${prefermentName} · ${t.flourBlend}` : prefermentName,
+      sauce: normalizedInput.sauce.enabled
+        ? `${localizedSelectedSauceOption?.name ?? getSauceStyleLabel(normalizedInput.sauce.style, t)} · ${normalizedInput.sauce.gramsPerPizza}g / ${settings.language === "de" ? "Pizza" : "pizza"}`
+        : t.none,
       planner:
         planMode === "ready-by"
           ? `${t.readyBy}: ${formatDateTime(new Date(readyBy).toISOString(), settings.language)}`
           : `${result.totalFermentationHours}h ${t.totalTime.toLowerCase()}`,
+      formula: `${displayRecipeName} · ${normalizedInput.doughBalls} x ${normalizedInput.ballWeight}g`,
       quality:
         qualitySignals.length > 2
           ? `${qualitySignals[0]?.label} · ${qualitySignals[1]?.label} +${qualitySignals.length - 2}`
           : qualitySignals.map((signal) => signal.label).join(" · "),
+      guidance: `${result.totalFermentationHours}h · ${formatTemperature(result.oven.tempF, settings.temperatureUnit)}`,
+      method: `${result.totalFermentationHours}h · ${formatTemperature(result.oven.tempF, settings.temperatureUnit)}`,
       cost: `${formatMoney(cost.perBall, cost.currency, settings.language)} · ${t.perDough.toLowerCase()}`,
       saved: `${savedRecipes.length} ${t.savedCount}`,
       journal: `${bakeLog.length} ${t.journalCount}`
     }),
-    [activeStyle.name, activeStyle.origin, bakeLog.length, cost, planMode, qualitySignals, readyBy, result.totalFermentationHours, savedRecipes.length, settings, t]
+    [
+      activeStyle.name,
+      activeStyle.origin,
+      bakeLog.length,
+      cost,
+      displayRecipeName,
+      localizedSelectedSauceOption,
+      normalizedInput.ballWeight,
+      normalizedInput.doughBalls,
+      normalizedInput.flourBlendEnabled,
+      normalizedInput.hydrationPercent,
+      normalizedInput.sauce.enabled,
+      normalizedInput.sauce.gramsPerPizza,
+      normalizedInput.sauce.style,
+      planMode,
+      prefermentName,
+      preset,
+      qualitySignals,
+      readyBy,
+      result.oven.tempF,
+      result.totalFermentationHours,
+      savedRecipes.length,
+      settings,
+      t
+    ]
   );
   const plan = useMemo<BakeStep[]>(() => {
     const anchor = planMode === "ready-by" ? new Date(readyBy) : new Date();
@@ -1785,6 +1859,21 @@ export function App() {
       ...current,
       [key]: !current[key]
     }));
+  };
+  const renderPanelToggle = (key: PanelKey) => {
+    const toggleLabel = openPanels[key] ? t.collapseSection : t.expandSection;
+    return (
+      <button
+        className={`iconButton panelToggle ${openPanels[key] ? "open" : ""}`}
+        type="button"
+        aria-expanded={openPanels[key]}
+        aria-label={toggleLabel}
+        title={toggleLabel}
+        onClick={() => togglePanel(key)}
+      >
+        <ChevronDown size={16} />
+      </button>
+    );
   };
 
   const updateTheme = (theme: ThemeMode) => {
@@ -2130,546 +2219,604 @@ export function App() {
               label={t.styles}
               summary={panelSummaries.styles}
               collapsed={!openPanels.styles}
-              collapseAction={
-                <button
-                  className={`iconButton panelToggle ${openPanels.styles ? "open" : ""}`}
-                  type="button"
-                  aria-label={openPanels.styles ? t.collapseSection : t.expandSection}
-                  title={openPanels.styles ? t.collapseSection : t.expandSection}
-                  onClick={() => togglePanel("styles")}
-                >
-                  <ChevronDown size={16} />
-                </button>
-              }
+              collapseAction={renderPanelToggle("styles")}
             />
             {openPanels.styles ? (
               <div className="styleGrid">
-                {PIZZA_STYLES.map((style) => (
-                  <button
-                    className={style.id === normalizedInput.styleId ? "styleButton active" : "styleButton"}
-                    key={style.id}
-                    type="button"
-                    onClick={() => onStyleChange(style.id)}
-                  >
-                    <strong>{style.name}</strong>
-                    <span>{style.flourType}</span>
-                    <small>{style.origin}</small>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </section>
-
-          <section className="panel">
-            <PanelTitle icon={<Settings2 size={18} />} label={t.doughSetup} />
-            <div className="fieldGrid">
-              <Field
-                label={t.doughBalls}
-                value={normalizedInput.doughBalls}
-                min={1}
-                onChange={(value) => setPartial({ doughBalls: numberValue(value, 1) })}
-              />
-              <Field
-                label={t.ballWeight}
-                value={normalizedInput.ballWeight}
-                suffix="g"
-                min={1}
-                onChange={(value) => setPartial({ ballWeight: numberValue(value, 1) })}
-              />
-              <Field
-                label={t.hydration}
-                value={normalizedInput.hydrationPercent}
-                suffix="%"
-                step={0.1}
-                onChange={(value) => setPartial({ hydrationPercent: numberValue(value) })}
-              />
-              <Field
-                label={t.salt}
-                value={normalizedInput.saltPercent}
-                suffix="%"
-                step={0.1}
-                onChange={(value) => setPartial({ saltPercent: numberValue(value) })}
-              />
-              <Field
-                label={t.oil}
-                value={normalizedInput.oilPercent}
-                suffix="%"
-                hint={getEnrichmentHint("oil", settings.language, result)}
-                step={0.1}
-                onChange={(value) => setPartial({ oilPercent: numberValue(value) })}
-              />
-              <Field
-                label={t.sugar}
-                value={normalizedInput.sugarPercent}
-                suffix="%"
-                hint={getEnrichmentHint("sugar", settings.language, result)}
-                step={0.1}
-                onChange={(value) => setPartial({ sugarPercent: numberValue(value) })}
-              />
-              <Field
-                label={t.honey}
-                value={normalizedInput.honeyPercent}
-                suffix="%"
-                hint={getEnrichmentHint("honey", settings.language, result)}
-                step={0.1}
-                onChange={(value) => setPartial({ honeyPercent: numberValue(value) })}
-              />
-              <Field
-                label={t.malt}
-                value={normalizedInput.maltPercent}
-                suffix="%"
-                hint={getEnrichmentHint("malt", settings.language, result)}
-                step={0.1}
-                onChange={(value) => setPartial({ maltPercent: numberValue(value) })}
-              />
-              <Field
-                label={t.lard}
-                value={normalizedInput.lardPercent}
-                suffix="%"
-                hint={getEnrichmentHint("lard", settings.language, result)}
-                step={0.1}
-                onChange={(value) => setPartial({ lardPercent: numberValue(value) })}
-              />
-              <Field
-                label={t.milkPowder}
-                value={normalizedInput.milkPowderPercent}
-                suffix="%"
-                hint={getEnrichmentHint("milk-powder", settings.language, result)}
-                step={0.1}
-                onChange={(value) => setPartial({ milkPowderPercent: numberValue(value) })}
-              />
-            </div>
-            <div className="fieldGrid compact">
-              <SelectField
-                label={t.yeastType}
-                value={normalizedInput.yeastType}
-                onChange={(value) => setPartial({ yeastType: value as YeastType })}
-              >
-                {yeastOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </SelectField>
-              <SelectField
-                label={t.mixerType}
-                value={normalizedInput.mixerType}
-                onChange={(value) => setPartial({ mixerType: value as CalculatorInput["mixerType"] })}
-              >
-                <option value="hand">Hand</option>
-                <option value="planetary">Planetary</option>
-                <option value="spiral">Spiral</option>
-              </SelectField>
-              <Field
-                label={t.manualYeast}
-                value={normalizedInput.manualYeastPercent ?? ""}
-                suffix="%"
-                step={0.01}
-                onChange={(value) =>
-                  setPartial({ manualYeastPercent: value === "" ? undefined : numberValue(value) })
-                }
-              />
-              <Field
-                label={t.flourTemp}
-                value={displayTemperatureValue(
-                  normalizedInput.flourTempF ?? normalizedInput.fermentation.roomTempF,
-                  settings.temperatureUnit
-                )}
-                suffix={`\u00B0${settings.temperatureUnit}`}
-                onChange={(value) =>
-                  setPartial({
-                    flourTempF: parseTemperatureInput(
-                      value,
-                      settings.temperatureUnit,
-                      normalizedInput.fermentation.roomTempF
-                    )
-                  })
-                }
-              />
-            </div>
-          </section>
-
-          <section className="panel">
-            <PanelTitle icon={<CalendarClock size={18} />} label={t.fermentation} />
-            <div className="presetScroller">
-              {presetKeys.map((key) => (
-                <button
-                  className={preset === key ? "chip active" : "chip"}
-                  key={key}
-                  type="button"
-                  onClick={() => onPresetChange(key)}
-                >
-                  {getPresetLabel(key, settings.language)}
-                </button>
-              ))}
-            </div>
-            <div className="panelMetaRow">
-              <span className="sectionMeta">
-                {getPresetLabel(preset, settings.language)} · {result.totalFermentationHours}h {t.totalTime.toLowerCase()}
-              </span>
-              <button
-                className={`subtleDisclosure ${showFermentationDetails ? "open" : ""}`}
-                type="button"
-                onClick={() => setShowFermentationDetails((current) => !current)}
-              >
-                <span>{t.advancedSchedule}</span>
-                <ChevronDown size={16} />
-              </button>
-            </div>
-            {showFermentationDetails ? (
-              <div className="fermentGrid">
-                <FermentationStageCard
-                  {...getFermentationStageContent("bulk", settings.language)}
-                  durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
-                  temperatureLabel={t.roomTemp}
-                >
-                  <Field
-                    label={settings.language === "de" ? "Dauer" : "Hours"}
-                    value={normalizedInput.fermentation.roomTempHours}
-                    suffix="h"
-                    step={0.5}
-                    onChange={(value) => setFermentation({ roomTempHours: numberValue(value) })}
-                  />
-                  <Field
-                    label={t.roomTemp}
-                    value={displayTemperatureValue(normalizedInput.fermentation.roomTempF, settings.temperatureUnit)}
-                    suffix={`\u00B0${settings.temperatureUnit}`}
-                    onChange={(value) =>
-                      setFermentation({
-                        roomTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.roomTempF)
-                      })
-                    }
-                  />
-                </FermentationStageCard>
-                <FermentationStageCard
-                  {...getFermentationStageContent("temper", settings.language)}
-                  durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
-                  temperatureLabel={t.roomTemp}
-                >
-                  <Field
-                    label={settings.language === "de" ? "Dauer" : "Hours"}
-                    value={normalizedInput.fermentation.finalRiseHours}
-                    suffix="h"
-                    step={0.5}
-                    onChange={(value) => setFermentation({ finalRiseHours: numberValue(value) })}
-                  />
-                  <Field
-                    label={t.roomTemp}
-                    value={displayTemperatureValue(normalizedInput.fermentation.roomTempF, settings.temperatureUnit)}
-                    suffix={`\u00B0${settings.temperatureUnit}`}
-                    onChange={(value) =>
-                      setFermentation({
-                        roomTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.roomTempF)
-                      })
-                    }
-                  />
-                </FermentationStageCard>
-                <FermentationStageCard
-                  {...getFermentationStageContent("cold-ball", settings.language)}
-                  durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
-                  temperatureLabel={t.fridgeTemp}
-                >
-                  <Field
-                    label={settings.language === "de" ? "Dauer" : "Hours"}
-                    value={normalizedInput.fermentation.coldBallHours}
-                    suffix="h"
-                    step={0.5}
-                    onChange={(value) => setFermentation({ coldBallHours: numberValue(value) })}
-                  />
-                  <Field
-                    label={t.fridgeTemp}
-                    value={displayTemperatureValue(normalizedInput.fermentation.fridgeTempF, settings.temperatureUnit)}
-                    suffix={`\u00B0${settings.temperatureUnit}`}
-                    onChange={(value) =>
-                      setFermentation({
-                        fridgeTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.fridgeTempF)
-                      })
-                    }
-                  />
-                </FermentationStageCard>
-                <FermentationStageCard
-                  {...getFermentationStageContent("cold-bulk", settings.language)}
-                  durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
-                  temperatureLabel={t.fridgeTemp}
-                >
-                  <Field
-                    label={settings.language === "de" ? "Dauer" : "Hours"}
-                    value={normalizedInput.fermentation.coldBulkHours}
-                    suffix="h"
-                    step={0.5}
-                    onChange={(value) => setFermentation({ coldBulkHours: numberValue(value) })}
-                  />
-                  <Field
-                    label={t.fridgeTemp}
-                    value={displayTemperatureValue(normalizedInput.fermentation.fridgeTempF, settings.temperatureUnit)}
-                    suffix={`\u00B0${settings.temperatureUnit}`}
-                    onChange={(value) =>
-                      setFermentation({
-                        fridgeTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.fridgeTempF)
-                      })
-                    }
-                  />
-                </FermentationStageCard>
-                <FermentationStageCard
-                  {...getFermentationStageContent("cellar", settings.language)}
-                  durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
-                  temperatureLabel={t.cellarTemp}
-                >
-                  <Field
-                    label={settings.language === "de" ? "Dauer" : "Hours"}
-                    value={normalizedInput.fermentation.cellarTempHours}
-                    suffix="h"
-                    step={0.5}
-                    onChange={(value) => setFermentation({ cellarTempHours: numberValue(value) })}
-                  />
-                  <Field
-                    label={t.cellarTemp}
-                    value={displayTemperatureValue(normalizedInput.fermentation.cellarTempF, settings.temperatureUnit)}
-                    suffix={`\u00B0${settings.temperatureUnit}`}
-                    onChange={(value) =>
-                      setFermentation({
-                        cellarTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.cellarTempF)
-                      })
-                    }
-                  />
-                </FermentationStageCard>
-              </div>
-            ) : null}
-          </section>
-
-          <section className="panel">
-            <PanelTitle icon={<FlaskConical size={18} />} label={t.doughStudio} />
-            <div className="fieldGrid compact">
-              <SelectField
-                label={t.prefermentMode}
-                value={prefermentMode}
-                onChange={(value) => setPreferment(getPrefermentPatch(value as PrefermentMode))}
-              >
-                <option value="none">{t.none}</option>
-                <option value="poolish">{t.poolish}</option>
-                <option value="biga">{t.biga}</option>
-                <option value="tiga">{t.tiga}</option>
-                <option value="bassinage">{t.bassinage}</option>
-              </SelectField>
-              <Toggle
-                checked={normalizedInput.flourBlendEnabled}
-                label={t.flourBlend}
-                hint={result.flourBlend.description}
-                onChange={(checked) => setPartial({ flourBlendEnabled: checked })}
-              />
-            </div>
-
-            {prefermentMode !== "none" ? (
-              <div className="fieldGrid">
-                <Field
-                  label={`${t.prefermentFlour} (${prefermentFlourGrams}g)`}
-                  value={normalizedInput.preferment.flourPercent}
-                  suffix="%"
-                  min={0}
-                  max={100}
-                  onChange={(value) => setPreferment({ flourPercent: numberValue(value, 30) })}
-                />
-                <Field
-                  label={t.bigaHydration}
-                  value={normalizedInput.preferment.bigaHydration}
-                  suffix="%"
-                  onChange={(value) => setPreferment({ bigaHydration: numberValue(value, 55) })}
-                />
-                <Field
-                  label={t.prefermentRoom}
-                  value={normalizedInput.preferment.roomHours}
-                  suffix="h"
-                  onChange={(value) => setPreferment({ roomHours: numberValue(value, 12) })}
-                />
-                <Field
-                  label={t.prefermentCold}
-                  value={normalizedInput.preferment.coldHours}
-                  suffix="h"
-                  onChange={(value) => setPreferment({ coldHours: numberValue(value) })}
-                />
-                <p className="sectionMeta fieldMeta">
-                  {normalizedInput.preferment.flourPercent}% = {prefermentFlourGrams}g {t.flour.toLowerCase()} {t.inPreferment}
-                </p>
-                <p className="sectionMeta fieldMeta">
-                  {t.mainDoughAdditions}: {mainDoughFlourGrams}g {t.additionalFlour}, {mainDoughWaterGrams}g {t.additionalWater},{" "}
-                  {mainDoughYeastGrams}g {t.additionalYeast}
-                </p>
-              </div>
-            ) : null}
-
-            {normalizedInput.flourBlendEnabled ? (
-              <div className="blendList">
-                <p className="sectionMeta">
-                  {t.blendTotal}: {blendTotal}%
-                </p>
-                {normalizedInput.flourBlend.map((item, index) => {
-                  const breakdown = blendBreakdown[index];
+                {styleGroups.map(({ parent, variants }) => {
+                  const parentActive = parent.id === normalizedInput.styleId;
+                  const variantActive = variants.some((variant) => variant.id === normalizedInput.styleId);
+                  const selectedStyleId = parentActive ? parent.id : variantActive ? normalizedInput.styleId : parent.id;
 
                   return (
-                  <div className="blendRow" key={`${item.flourId}-${index}`}>
-                    <select value={item.flourId} onChange={(event) => setBlendItem(index, { flourId: event.target.value })}>
-                      {FLOURS.map((flour) => (
-                        <option key={flour.id} value={flour.id}>
-                          {flour.brand} {flour.name}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      value={item.percentage}
-                      min={0}
-                      max={100}
-                      onChange={(event) => setBlendItem(index, { percentage: numberValue(event.target.value) })}
-                    />
-                    <button
-                      className="iconButton"
-                      type="button"
-                      onClick={() => removeBlendItem(index)}
-                      aria-label="Remove flour"
-                    >
-                      x
-                    </button>
-                    {breakdown ? (
-                      <p className="sectionMeta blendMeta">
-                        {breakdown.totalGrams}g {t.totalLabel}
-                        {prefermentMode !== "none"
-                          ? `, ${breakdown.prefermentGrams}g ${prefermentName}, ${breakdown.mainDoughGrams}g ${t.mainDoughAdditions.toLowerCase()}`
-                          : ""}
-                      </p>
-                    ) : null}
-                  </div>
+                    <div className={parentActive || variantActive ? "styleGroupCard activeFamily" : "styleGroupCard"} key={parent.id}>
+                      <button
+                        className={parentActive ? "styleButton stylePrimaryButton active" : "styleButton stylePrimaryButton"}
+                        type="button"
+                        onClick={() => onStyleChange(parent.id)}
+                      >
+                        <strong>{parent.name}</strong>
+                        <span>{parent.flourType}</span>
+                        <small>{parent.origin}</small>
+                      </button>
+                      <div className="styleVariantFooter">
+                        {variants.length ? (
+                          <>
+                            <p className="styleVariantHeading">{t.variants}</p>
+                            <select
+                              className="styleVariantSelect"
+                              value={selectedStyleId}
+                              onChange={(event) => onStyleChange(event.target.value)}
+                            >
+                              <option value={parent.id}>{parent.name}</option>
+                              {variants.map((variant) => (
+                                <option key={variant.id} value={variant.id}>
+                                  {variant.variantLabel ?? variant.name}
+                                </option>
+                              ))}
+                            </select>
+                          </>
+                        ) : (
+                          <div className="styleVariantPlaceholder" aria-hidden="true" />
+                        )}
+                      </div>
+                    </div>
                   );
                 })}
-                <button className="ghostButton" type="button" onClick={addBlendItem}>
-                  {t.addFlour}
-                </button>
               </div>
             ) : null}
           </section>
 
           <section className="panel">
-            <PanelTitle icon={<BookOpen size={18} />} label={t.sauce} />
-            <div className="fieldGrid compact">
-              <Toggle
-                checked={normalizedInput.sauce.enabled}
-                label={t.sauce}
-                hint={t.sauceHint}
-                onChange={(checked) => setSauce({ enabled: checked })}
-              />
-            </div>
-            {normalizedInput.sauce.enabled ? (
+            <PanelTitle
+              icon={<Settings2 size={18} />}
+              label={t.doughSetup}
+              summary={panelSummaries.doughSetup}
+              collapsed={!openPanels.doughSetup}
+              collapseAction={renderPanelToggle("doughSetup")}
+            />
+            {openPanels.doughSetup ? (
+              <>
+                <div className="fieldGrid">
+                  <Field
+                    label={t.doughBalls}
+                    value={normalizedInput.doughBalls}
+                    min={1}
+                    onChange={(value) => setPartial({ doughBalls: numberValue(value, 1) })}
+                  />
+                  <Field
+                    label={t.ballWeight}
+                    value={normalizedInput.ballWeight}
+                    suffix="g"
+                    min={1}
+                    onChange={(value) => setPartial({ ballWeight: numberValue(value, 1) })}
+                  />
+                  <Field
+                    label={t.hydration}
+                    value={normalizedInput.hydrationPercent}
+                    suffix="%"
+                    step={0.1}
+                    onChange={(value) => setPartial({ hydrationPercent: numberValue(value) })}
+                  />
+                  <Field
+                    label={t.salt}
+                    value={normalizedInput.saltPercent}
+                    suffix="%"
+                    step={0.1}
+                    onChange={(value) => setPartial({ saltPercent: numberValue(value) })}
+                  />
+                  <Field
+                    label={t.oil}
+                    value={normalizedInput.oilPercent}
+                    suffix="%"
+                    hint={getEnrichmentHint("oil", settings.language, result)}
+                    step={0.1}
+                    onChange={(value) => setPartial({ oilPercent: numberValue(value) })}
+                  />
+                  <Field
+                    label={t.sugar}
+                    value={normalizedInput.sugarPercent}
+                    suffix="%"
+                    hint={getEnrichmentHint("sugar", settings.language, result)}
+                    step={0.1}
+                    onChange={(value) => setPartial({ sugarPercent: numberValue(value) })}
+                  />
+                  <Field
+                    label={t.honey}
+                    value={normalizedInput.honeyPercent}
+                    suffix="%"
+                    hint={getEnrichmentHint("honey", settings.language, result)}
+                    step={0.1}
+                    onChange={(value) => setPartial({ honeyPercent: numberValue(value) })}
+                  />
+                  <Field
+                    label={t.malt}
+                    value={normalizedInput.maltPercent}
+                    suffix="%"
+                    hint={getEnrichmentHint("malt", settings.language, result)}
+                    step={0.1}
+                    onChange={(value) => setPartial({ maltPercent: numberValue(value) })}
+                  />
+                  <Field
+                    label={t.lard}
+                    value={normalizedInput.lardPercent}
+                    suffix="%"
+                    hint={getEnrichmentHint("lard", settings.language, result)}
+                    step={0.1}
+                    onChange={(value) => setPartial({ lardPercent: numberValue(value) })}
+                  />
+                  <Field
+                    label={t.milkPowder}
+                    value={normalizedInput.milkPowderPercent}
+                    suffix="%"
+                    hint={getEnrichmentHint("milk-powder", settings.language, result)}
+                    step={0.1}
+                    onChange={(value) => setPartial({ milkPowderPercent: numberValue(value) })}
+                  />
+                </div>
+                <div className="fieldGrid compact">
+                  <SelectField
+                    label={t.yeastType}
+                    value={normalizedInput.yeastType}
+                    onChange={(value) => setPartial({ yeastType: value as YeastType })}
+                  >
+                    {yeastOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </SelectField>
+                  <SelectField
+                    label={t.mixerType}
+                    value={normalizedInput.mixerType}
+                    onChange={(value) => setPartial({ mixerType: value as CalculatorInput["mixerType"] })}
+                  >
+                    <option value="hand">Hand</option>
+                    <option value="planetary">Planetary</option>
+                    <option value="spiral">Spiral</option>
+                  </SelectField>
+                  <Field
+                    label={t.manualYeast}
+                    value={normalizedInput.manualYeastPercent ?? ""}
+                    suffix="%"
+                    step={0.01}
+                    onChange={(value) =>
+                      setPartial({ manualYeastPercent: value === "" ? undefined : numberValue(value) })
+                    }
+                  />
+                  <Field
+                    label={t.flourTemp}
+                    value={displayTemperatureValue(
+                      normalizedInput.flourTempF ?? normalizedInput.fermentation.roomTempF,
+                      settings.temperatureUnit
+                    )}
+                    suffix={`\u00B0${settings.temperatureUnit}`}
+                    onChange={(value) =>
+                      setPartial({
+                        flourTempF: parseTemperatureInput(
+                          value,
+                          settings.temperatureUnit,
+                          normalizedInput.fermentation.roomTempF
+                        )
+                      })
+                    }
+                  />
+                </div>
+              </>
+            ) : null}
+          </section>
+
+          <section className="panel">
+            <PanelTitle
+              icon={<CalendarClock size={18} />}
+              label={t.fermentation}
+              summary={panelSummaries.fermentation}
+              collapsed={!openPanels.fermentation}
+              collapseAction={renderPanelToggle("fermentation")}
+            />
+            {openPanels.fermentation ? (
+              <>
+                <div className="presetScroller">
+                  {presetKeys.map((key) => (
+                    <button
+                      className={preset === key ? "chip active" : "chip"}
+                      key={key}
+                      type="button"
+                      onClick={() => onPresetChange(key)}
+                    >
+                      {getPresetLabel(key, settings.language)}
+                    </button>
+                  ))}
+                </div>
+                <div className="panelMetaRow">
+                  <span className="sectionMeta">
+                    {getPresetLabel(preset, settings.language)} · {result.totalFermentationHours}h {t.totalTime.toLowerCase()}
+                  </span>
+                  <button
+                    className={`subtleDisclosure ${showFermentationDetails ? "open" : ""}`}
+                    type="button"
+                    onClick={() => setShowFermentationDetails((current) => !current)}
+                  >
+                    <span>{t.advancedSchedule}</span>
+                    <ChevronDown size={16} />
+                  </button>
+                </div>
+                {showFermentationDetails ? (
+                  <div className="fermentGrid">
+                    <FermentationStageCard
+                      {...getFermentationStageContent("bulk", settings.language)}
+                      durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
+                      temperatureLabel={t.roomTemp}
+                    >
+                      <Field
+                        label={settings.language === "de" ? "Dauer" : "Hours"}
+                        value={normalizedInput.fermentation.roomTempHours}
+                        suffix="h"
+                        step={0.5}
+                        onChange={(value) => setFermentation({ roomTempHours: numberValue(value) })}
+                      />
+                      <Field
+                        label={t.roomTemp}
+                        value={displayTemperatureValue(normalizedInput.fermentation.roomTempF, settings.temperatureUnit)}
+                        suffix={`\u00B0${settings.temperatureUnit}`}
+                        onChange={(value) =>
+                          setFermentation({
+                            roomTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.roomTempF)
+                          })
+                        }
+                      />
+                    </FermentationStageCard>
+                    <FermentationStageCard
+                      {...getFermentationStageContent("temper", settings.language)}
+                      durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
+                      temperatureLabel={t.roomTemp}
+                    >
+                      <Field
+                        label={settings.language === "de" ? "Dauer" : "Hours"}
+                        value={normalizedInput.fermentation.finalRiseHours}
+                        suffix="h"
+                        step={0.5}
+                        onChange={(value) => setFermentation({ finalRiseHours: numberValue(value) })}
+                      />
+                      <Field
+                        label={t.roomTemp}
+                        value={displayTemperatureValue(normalizedInput.fermentation.roomTempF, settings.temperatureUnit)}
+                        suffix={`\u00B0${settings.temperatureUnit}`}
+                        onChange={(value) =>
+                          setFermentation({
+                            roomTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.roomTempF)
+                          })
+                        }
+                      />
+                    </FermentationStageCard>
+                    <FermentationStageCard
+                      {...getFermentationStageContent("cold-ball", settings.language)}
+                      durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
+                      temperatureLabel={t.fridgeTemp}
+                    >
+                      <Field
+                        label={settings.language === "de" ? "Dauer" : "Hours"}
+                        value={normalizedInput.fermentation.coldBallHours}
+                        suffix="h"
+                        step={0.5}
+                        onChange={(value) => setFermentation({ coldBallHours: numberValue(value) })}
+                      />
+                      <Field
+                        label={t.fridgeTemp}
+                        value={displayTemperatureValue(normalizedInput.fermentation.fridgeTempF, settings.temperatureUnit)}
+                        suffix={`\u00B0${settings.temperatureUnit}`}
+                        onChange={(value) =>
+                          setFermentation({
+                            fridgeTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.fridgeTempF)
+                          })
+                        }
+                      />
+                    </FermentationStageCard>
+                    <FermentationStageCard
+                      {...getFermentationStageContent("cold-bulk", settings.language)}
+                      durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
+                      temperatureLabel={t.fridgeTemp}
+                    >
+                      <Field
+                        label={settings.language === "de" ? "Dauer" : "Hours"}
+                        value={normalizedInput.fermentation.coldBulkHours}
+                        suffix="h"
+                        step={0.5}
+                        onChange={(value) => setFermentation({ coldBulkHours: numberValue(value) })}
+                      />
+                      <Field
+                        label={t.fridgeTemp}
+                        value={displayTemperatureValue(normalizedInput.fermentation.fridgeTempF, settings.temperatureUnit)}
+                        suffix={`\u00B0${settings.temperatureUnit}`}
+                        onChange={(value) =>
+                          setFermentation({
+                            fridgeTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.fridgeTempF)
+                          })
+                        }
+                      />
+                    </FermentationStageCard>
+                    <FermentationStageCard
+                      {...getFermentationStageContent("cellar", settings.language)}
+                      durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
+                      temperatureLabel={t.cellarTemp}
+                    >
+                      <Field
+                        label={settings.language === "de" ? "Dauer" : "Hours"}
+                        value={normalizedInput.fermentation.cellarTempHours}
+                        suffix="h"
+                        step={0.5}
+                        onChange={(value) => setFermentation({ cellarTempHours: numberValue(value) })}
+                      />
+                      <Field
+                        label={t.cellarTemp}
+                        value={displayTemperatureValue(normalizedInput.fermentation.cellarTempF, settings.temperatureUnit)}
+                        suffix={`\u00B0${settings.temperatureUnit}`}
+                        onChange={(value) =>
+                          setFermentation({
+                            cellarTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.cellarTempF)
+                          })
+                        }
+                      />
+                    </FermentationStageCard>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </section>
+
+          <section className="panel">
+            <PanelTitle
+              icon={<FlaskConical size={18} />}
+              label={t.doughStudio}
+              summary={panelSummaries.doughStudio}
+              collapsed={!openPanels.doughStudio}
+              collapseAction={renderPanelToggle("doughStudio")}
+            />
+            {openPanels.doughStudio ? (
               <>
                 <div className="fieldGrid compact">
-                  <Field
-                    label={t.sauceWeight}
-                    value={normalizedInput.sauce.gramsPerPizza}
-                    suffix="g"
-                    step={5}
-                    min={0}
-                    onChange={(value) => setSauce({ gramsPerPizza: numberValue(value, 90) })}
+                  <SelectField
+                    label={t.prefermentMode}
+                    value={prefermentMode}
+                    onChange={(value) => setPreferment(getPrefermentPatch(value as PrefermentMode))}
+                  >
+                    <option value="none">{t.none}</option>
+                    <option value="poolish">{t.poolish}</option>
+                    <option value="biga">{t.biga}</option>
+                    <option value="tiga">{t.tiga}</option>
+                    <option value="bassinage">{t.bassinage}</option>
+                  </SelectField>
+                  <Toggle
+                    checked={normalizedInput.flourBlendEnabled}
+                    label={t.flourBlend}
+                    hint={result.flourBlend.description}
+                    onChange={(checked) => setPartial({ flourBlendEnabled: checked })}
                   />
-                  {!selectedSauceCollection ? (
-                    <SelectField
-                      label={t.sauceStyle}
-                      value={normalizedInput.sauce.style}
-                      onChange={(value) => setSauce({ style: value as CalculatorInput["sauce"]["style"] })}
-                    >
-                      <option value="classic">{t.sauceClassic}</option>
-                      <option value="raw">{t.sauceRaw}</option>
-                      <option value="cooked">{t.sauceCooked}</option>
-                      <option value="white">{t.sauceWhite}</option>
-                    </SelectField>
-                  ) : null}
                 </div>
-                {selectedSauceCollection ? (
-                  <>
-                    <Notice tone="notice">
-                      {localizeSauceSaltWarning(selectedSauceCollection.saltWarning ?? SAUCE_SALT_WARNING, settings.language)}
-                    </Notice>
-                    <div className="sauceOptionGrid">
-                      {localizedSauceOptions.map((option) => (
+
+                {prefermentMode !== "none" ? (
+                  <div className="fieldGrid">
+                    <Field
+                      label={`${t.prefermentFlour} (${prefermentFlourGrams}g)`}
+                      value={normalizedInput.preferment.flourPercent}
+                      suffix="%"
+                      min={0}
+                      max={100}
+                      onChange={(value) => setPreferment({ flourPercent: numberValue(value, 30) })}
+                    />
+                    <Field
+                      label={t.bigaHydration}
+                      value={normalizedInput.preferment.bigaHydration}
+                      suffix="%"
+                      onChange={(value) => setPreferment({ bigaHydration: numberValue(value, 55) })}
+                    />
+                    <Field
+                      label={t.prefermentRoom}
+                      value={normalizedInput.preferment.roomHours}
+                      suffix="h"
+                      onChange={(value) => setPreferment({ roomHours: numberValue(value, 12) })}
+                    />
+                    <Field
+                      label={t.prefermentCold}
+                      value={normalizedInput.preferment.coldHours}
+                      suffix="h"
+                      onChange={(value) => setPreferment({ coldHours: numberValue(value) })}
+                    />
+                    <p className="sectionMeta fieldMeta">
+                      {normalizedInput.preferment.flourPercent}% = {prefermentFlourGrams}g {t.flour.toLowerCase()} {t.inPreferment}
+                    </p>
+                    <p className="sectionMeta fieldMeta">
+                      {t.mainDoughAdditions}: {mainDoughFlourGrams}g {t.additionalFlour}, {mainDoughWaterGrams}g {t.additionalWater},{" "}
+                      {mainDoughYeastGrams}g {t.additionalYeast}
+                    </p>
+                  </div>
+                ) : null}
+
+                {normalizedInput.flourBlendEnabled ? (
+                  <div className="blendList">
+                    <p className="sectionMeta">
+                      {t.blendTotal}: {blendTotal}%
+                    </p>
+                    {normalizedInput.flourBlend.map((item, index) => {
+                      const breakdown = blendBreakdown[index];
+
+                      return (
+                      <div className="blendRow" key={`${item.flourId}-${index}`}>
+                        <select value={item.flourId} onChange={(event) => setBlendItem(index, { flourId: event.target.value })}>
+                          {FLOURS.map((flour) => (
+                            <option key={flour.id} value={flour.id}>
+                              {flour.brand} {flour.name}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="number"
+                          value={item.percentage}
+                          min={0}
+                          max={100}
+                          onChange={(event) => setBlendItem(index, { percentage: numberValue(event.target.value) })}
+                        />
                         <button
-                          className={localizedSelectedSauceOption?.id === option.id ? "sauceOptionCard active" : "sauceOptionCard"}
-                          key={option.id}
+                          className="iconButton"
                           type="button"
-                          onClick={() =>
-                            setSauce({
-                              recipeId: option.id,
-                              style: inferSauceStyleFromOption(option)
-                            })
-                          }
+                          onClick={() => removeBlendItem(index)}
+                          aria-label="Remove flour"
                         >
-                          <strong>{option.name}</strong>
-                          {option.description ? <span>{option.description}</span> : null}
-                          <small>{option.cookType}</small>
+                          x
                         </button>
-                      ))}
+                        {breakdown ? (
+                          <p className="sectionMeta blendMeta">
+                            {breakdown.totalGrams}g {t.totalLabel}
+                            {prefermentMode !== "none"
+                              ? `, ${breakdown.prefermentGrams}g ${prefermentName}, ${breakdown.mainDoughGrams}g ${t.mainDoughAdditions.toLowerCase()}`
+                              : ""}
+                          </p>
+                        ) : null}
+                      </div>
+                      );
+                    })}
+                    <button className="ghostButton" type="button" onClick={addBlendItem}>
+                      {t.addFlour}
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </section>
+
+          <section className="panel">
+            <PanelTitle
+              icon={<BookOpen size={18} />}
+              label={t.sauce}
+              summary={panelSummaries.sauce}
+              collapsed={!openPanels.sauce}
+              collapseAction={renderPanelToggle("sauce")}
+            />
+            {openPanels.sauce ? (
+              <>
+                <div className="fieldGrid compact">
+                  <Toggle
+                    checked={normalizedInput.sauce.enabled}
+                    label={t.sauce}
+                    hint={t.sauceHint}
+                    onChange={(checked) => setSauce({ enabled: checked })}
+                  />
+                </div>
+                {normalizedInput.sauce.enabled ? (
+                  <>
+                    <div className="fieldGrid compact">
+                      <Field
+                        label={t.sauceWeight}
+                        value={normalizedInput.sauce.gramsPerPizza}
+                        suffix="g"
+                        step={5}
+                        min={0}
+                        onChange={(value) => setSauce({ gramsPerPizza: numberValue(value, 90) })}
+                      />
+                      {!selectedSauceCollection ? (
+                        <SelectField
+                          label={t.sauceStyle}
+                          value={normalizedInput.sauce.style}
+                          onChange={(value) => setSauce({ style: value as CalculatorInput["sauce"]["style"] })}
+                        >
+                          <option value="classic">{t.sauceClassic}</option>
+                          <option value="raw">{t.sauceRaw}</option>
+                          <option value="cooked">{t.sauceCooked}</option>
+                          <option value="white">{t.sauceWhite}</option>
+                        </SelectField>
+                      ) : null}
                     </div>
-                    {localizedSelectedSauceOption ? (
+                    {selectedSauceCollection ? (
                       <>
-                        <div className="panelMetaRow">
-                          <span className="sectionMeta">
-                            {localizedSelectedSauceOption.name} · {normalizedInput.sauce.gramsPerPizza}g / {settings.language === "de" ? "Pizza" : "pizza"}
-                          </span>
-                          <button
-                            className={`subtleDisclosure ${showSauceRecipe ? "open" : ""}`}
-                            type="button"
-                            onClick={() => setShowSauceRecipe((current) => !current)}
-                          >
-                            <span>{t.sauceRecipeDetails}</span>
-                            <ChevronDown size={16} />
-                          </button>
+                        <Notice tone="notice">
+                          {localizeSauceSaltWarning(selectedSauceCollection.saltWarning ?? SAUCE_SALT_WARNING, settings.language)}
+                        </Notice>
+                        <div className="sauceOptionGrid">
+                          {localizedSauceOptions.map((option) => (
+                            <button
+                              className={localizedSelectedSauceOption?.id === option.id ? "sauceOptionCard active" : "sauceOptionCard"}
+                              key={option.id}
+                              type="button"
+                              onClick={() =>
+                                setSauce({
+                                  recipeId: option.id,
+                                  style: inferSauceStyleFromOption(option)
+                                })
+                              }
+                            >
+                              <strong>{option.name}</strong>
+                              {option.description ? <span>{option.description}</span> : null}
+                              <small>{option.cookType}</small>
+                            </button>
+                          ))}
                         </div>
-                        {showSauceRecipe ? (
-                          <div className="sauceDetailCard">
-                            <div className="sauceDetailHeader">
-                              <div>
-                                <strong>{localizedSelectedSauceOption.name}</strong>
-                                {localizedSelectedSauceOption.description ? <span>{localizedSelectedSauceOption.description}</span> : null}
-                              </div>
-                              <div className="sauceMeta">
-                                {localizedSelectedSauceOption.source ? (
-                                  <span>
-                                    {sauceUi.source}: {localizedSelectedSauceOption.source}
-                                  </span>
-                                ) : null}
-                                {localizedSelectedSauceOption.yield ? (
-                                  <span>
-                                    {sauceUi.yield}: {localizedSelectedSauceOption.yield}
-                                  </span>
-                                ) : null}
-                              </div>
+                        {localizedSelectedSauceOption ? (
+                          <>
+                            <div className="panelMetaRow">
+                              <span className="sectionMeta">
+                                {localizedSelectedSauceOption.name} · {normalizedInput.sauce.gramsPerPizza}g / {settings.language === "de" ? "Pizza" : "pizza"}
+                              </span>
+                              <button
+                                className={`subtleDisclosure ${showSauceRecipe ? "open" : ""}`}
+                                type="button"
+                                onClick={() => setShowSauceRecipe((current) => !current)}
+                              >
+                                <span>{t.sauceRecipeDetails}</span>
+                                <ChevronDown size={16} />
+                              </button>
                             </div>
-                            <div className="sauceDetailGrid">
-                              <div className="sauceDetailBlock">
-                                <h4>{sauceUi.ingredients}</h4>
-                                <ul className="detailList">
-                                  {localizedSelectedSauceOption.ingredients.map((ingredient) => (
-                                    <li key={`${localizedSelectedSauceOption.id}-${ingredient.item}`}>
-                                      <strong>{ingredient.item}</strong>
+                            {showSauceRecipe ? (
+                              <div className="sauceDetailCard">
+                                <div className="sauceDetailHeader">
+                                  <div>
+                                    <strong>{localizedSelectedSauceOption.name}</strong>
+                                    {localizedSelectedSauceOption.description ? <span>{localizedSelectedSauceOption.description}</span> : null}
+                                  </div>
+                                  <div className="sauceMeta">
+                                    {localizedSelectedSauceOption.source ? (
                                       <span>
-                                        {ingredient.amount}
-                                        {ingredient.note ? ` - ${ingredient.note}` : ""}
+                                        {sauceUi.source}: {localizedSelectedSauceOption.source}
                                       </span>
-                                    </li>
-                                  ))}
-                                </ul>
+                                    ) : null}
+                                    {localizedSelectedSauceOption.yield ? (
+                                      <span>
+                                        {sauceUi.yield}: {localizedSelectedSauceOption.yield}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </div>
+                                <div className="sauceDetailGrid">
+                                  <div className="sauceDetailBlock">
+                                    <h4>{sauceUi.ingredients}</h4>
+                                    <ul className="detailList">
+                                      {localizedSelectedSauceOption.ingredients.map((ingredient) => (
+                                        <li key={`${localizedSelectedSauceOption.id}-${ingredient.item}`}>
+                                          <strong>{ingredient.item}</strong>
+                                          <span>
+                                            {ingredient.amount}
+                                            {ingredient.note ? ` - ${ingredient.note}` : ""}
+                                          </span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                  <div className="sauceDetailBlock">
+                                    <h4>{sauceUi.instructions}</h4>
+                                    <ol className="detailList ordered">
+                                      {localizedSelectedSauceOption.instructions.map((instruction) => (
+                                        <li key={`${localizedSelectedSauceOption.id}-${instruction}`}>{instruction}</li>
+                                      ))}
+                                    </ol>
+                                  </div>
+                                </div>
+                                {localizedSelectedSauceOption.proTip ? (
+                                  <Notice tone="ok">
+                                    <strong>{sauceUi.proTip}:</strong> {localizedSelectedSauceOption.proTip}
+                                  </Notice>
+                                ) : null}
                               </div>
-                              <div className="sauceDetailBlock">
-                                <h4>{sauceUi.instructions}</h4>
-                                <ol className="detailList ordered">
-                                  {localizedSelectedSauceOption.instructions.map((instruction) => (
-                                    <li key={`${localizedSelectedSauceOption.id}-${instruction}`}>{instruction}</li>
-                                  ))}
-                                </ol>
-                              </div>
-                            </div>
-                            {localizedSelectedSauceOption.proTip ? (
-                              <Notice tone="ok">
-                                <strong>{sauceUi.proTip}:</strong> {localizedSelectedSauceOption.proTip}
-                              </Notice>
                             ) : null}
-                          </div>
+                          </>
                         ) : null}
                       </>
                     ) : null}
@@ -2680,137 +2827,153 @@ export function App() {
           </section>
 
           <section className="panel">
-            <PanelTitle icon={<Wheat size={18} />} label={t.bakeSurface} />
-            {usesPanGeometry ? (
-              <div className="fieldGrid">
-                <SelectField
-                  label={t.shape}
-                  value={normalizedInput.pan.shape}
-                  onChange={(value) => setPan({ shape: value as CalculatorInput["pan"]["shape"] })}
-                >
-                  <option value="rectangular">{t.rectangular}</option>
-                  <option value="round">{t.round}</option>
-                </SelectField>
-                {normalizedInput.pan.shape === "round" ? (
+            <PanelTitle
+              icon={<Wheat size={18} />}
+              label={t.bakeSurface}
+              collapsed={!openPanels.bakeSurface}
+              collapseAction={renderPanelToggle("bakeSurface")}
+            />
+            {openPanels.bakeSurface ? (
+              usesPanGeometry ? (
+                <div className="fieldGrid">
+                  <SelectField
+                    label={t.shape}
+                    value={normalizedInput.pan.shape}
+                    onChange={(value) => setPan({ shape: value as CalculatorInput["pan"]["shape"] })}
+                  >
+                    <option value="rectangular">{t.rectangular}</option>
+                    <option value="round">{t.round}</option>
+                  </SelectField>
+                  {normalizedInput.pan.shape === "round" ? (
+                    <Field
+                      label={`${t.diameter} (${settings.sizeUnit === "in" ? t.inches : t.centimeters})`}
+                      value={normalizedInput.pan.diameter}
+                      suffix={getLengthSuffix(settings.sizeUnit)}
+                      onChange={(value) => setPan({ diameter: numberValue(value, 12) })}
+                    />
+                  ) : (
+                    <>
+                      <Field
+                        label={`${t.length} (${settings.sizeUnit === "in" ? t.inches : t.centimeters})`}
+                        value={normalizedInput.pan.length}
+                        suffix={getLengthSuffix(settings.sizeUnit)}
+                        onChange={(value) => setPan({ length: numberValue(value, 10) })}
+                      />
+                      <Field
+                        label={`${t.width} (${settings.sizeUnit === "in" ? t.inches : t.centimeters})`}
+                        value={normalizedInput.pan.width}
+                        suffix={getLengthSuffix(settings.sizeUnit)}
+                        onChange={(value) => setPan({ width: numberValue(value, 14) })}
+                      />
+                    </>
+                  )}
                   <Field
-                    label={`${t.diameter} (${settings.sizeUnit === "in" ? t.inches : t.centimeters})`}
-                    value={normalizedInput.pan.diameter}
+                    label={`${t.depth} (${settings.sizeUnit === "in" ? t.inches : t.centimeters})`}
+                    value={normalizedInput.pan.depth}
                     suffix={getLengthSuffix(settings.sizeUnit)}
-                    onChange={(value) => setPan({ diameter: numberValue(value, 12) })}
+                    step={0.5}
+                    onChange={(value) => setPan({ depth: numberValue(value, 2) })}
                   />
-                ) : (
-                  <>
-                    <Field
-                      label={`${t.length} (${settings.sizeUnit === "in" ? t.inches : t.centimeters})`}
-                      value={normalizedInput.pan.length}
-                      suffix={getLengthSuffix(settings.sizeUnit)}
-                      onChange={(value) => setPan({ length: numberValue(value, 10) })}
-                    />
-                    <Field
-                      label={`${t.width} (${settings.sizeUnit === "in" ? t.inches : t.centimeters})`}
-                      value={normalizedInput.pan.width}
-                      suffix={getLengthSuffix(settings.sizeUnit)}
-                      onChange={(value) => setPan({ width: numberValue(value, 14) })}
-                    />
-                  </>
-                )}
-                <Field
-                  label={`${t.depth} (${settings.sizeUnit === "in" ? t.inches : t.centimeters})`}
-                  value={normalizedInput.pan.depth}
-                  suffix={getLengthSuffix(settings.sizeUnit)}
-                  step={0.5}
-                  onChange={(value) => setPan({ depth: numberValue(value, 2) })}
-                />
-                <button className="actionButton alignEnd" type="button" onClick={applyPanWeight}>
-                  {t.applyPanWeight}
-                </button>
-              </div>
-            ) : (
-              <div className="sizePanel">
-                <p>{t.sizeHint}</p>
-                <div className="presetScroller">
-                  {sizePresetEntries.map((entry) => (
-                    <button
-                      className="chip"
-                      key={entry.sizeInches}
-                      type="button"
-                      onClick={() => applySizePreset(entry.sizeInches)}
-                    >
-                      {entry.label} = {entry.weight}g
-                    </button>
-                  ))}
+                  <button className="actionButton alignEnd" type="button" onClick={applyPanWeight}>
+                    {t.applyPanWeight}
+                  </button>
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="sizePanel">
+                  <p>{t.sizeHint}</p>
+                  <div className="presetScroller">
+                    {sizePresetEntries.map((entry) => (
+                      <button
+                        className="chip"
+                        key={entry.sizeInches}
+                        type="button"
+                        onClick={() => applySizePreset(entry.sizeInches)}
+                      >
+                        {entry.label} = {entry.weight}g
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            ) : null}
           </section>
 
           <section className="panel">
-            <PanelTitle icon={<Flame size={18} />} label={t.ovenProfile} />
-            <Segmented value={normalizedInput.oven.type} options={ovenOptions} onChange={(value) => setOven({ type: value })} />
-            <div className="fieldGrid">
-              {normalizedInput.oven.type === "pizza-oven" ? (
-                <>
-                  <Field
-                    label={t.stoneTemp}
-                    value={displayTemperatureValue(normalizedInput.oven.pizzaOvenStoneTempF, settings.temperatureUnit)}
-                    suffix={`\u00B0${settings.temperatureUnit}`}
-                    onChange={(value) =>
-                      setOven({
-                        pizzaOvenStoneTempF: parseTemperatureInput(
-                          value,
-                          settings.temperatureUnit,
-                          normalizedInput.oven.pizzaOvenStoneTempF
-                        )
-                      })
-                    }
-                  />
-                  <Field
-                    label={t.topHeat}
-                    value={displayTemperatureValue(normalizedInput.oven.pizzaOvenTopTempF, settings.temperatureUnit)}
-                    suffix={`\u00B0${settings.temperatureUnit}`}
-                    onChange={(value) =>
-                      setOven({
-                        pizzaOvenTopTempF: parseTemperatureInput(
-                          value,
-                          settings.temperatureUnit,
-                          normalizedInput.oven.pizzaOvenTopTempF
-                        )
-                      })
-                    }
-                  />
-                </>
-              ) : null}
-              {normalizedInput.oven.type === "deck-oven" ? (
-                <Field
-                  label={t.deckTemp}
-                  value={displayTemperatureValue(normalizedInput.oven.deckOvenTempF, settings.temperatureUnit)}
-                  suffix={`\u00B0${settings.temperatureUnit}`}
-                  onChange={(value) =>
-                    setOven({
-                      deckOvenTempF: parseTemperatureInput(
-                        value,
-                        settings.temperatureUnit,
-                        normalizedInput.oven.deckOvenTempF
-                      )
-                    })
-                  }
-                />
-              ) : null}
-              {normalizedInput.oven.type === "steel-stone" ? (
-                <Toggle
-                  checked={normalizedInput.oven.useBroilerMethod}
-                  label={t.broilerFinish}
-                  onChange={(checked) => setOven({ useBroilerMethod: checked })}
-                />
-              ) : null}
-              {normalizedInput.oven.type === "conventional" ? (
-                <Toggle
-                  checked={normalizedInput.oven.useFinishingBroil}
-                  label={t.finishingBroil}
-                  onChange={(checked) => setOven({ useFinishingBroil: checked })}
-                />
-              ) : null}
-            </div>
+            <PanelTitle
+              icon={<Flame size={18} />}
+              label={t.ovenProfile}
+              collapsed={!openPanels.ovenProfile}
+              collapseAction={renderPanelToggle("ovenProfile")}
+            />
+            {openPanels.ovenProfile ? (
+              <>
+                <Segmented value={normalizedInput.oven.type} options={ovenOptions} onChange={(value) => setOven({ type: value })} />
+                <div className="fieldGrid">
+                  {normalizedInput.oven.type === "pizza-oven" ? (
+                    <>
+                      <Field
+                        label={t.stoneTemp}
+                        value={displayTemperatureValue(normalizedInput.oven.pizzaOvenStoneTempF, settings.temperatureUnit)}
+                        suffix={`\u00B0${settings.temperatureUnit}`}
+                        onChange={(value) =>
+                          setOven({
+                            pizzaOvenStoneTempF: parseTemperatureInput(
+                              value,
+                              settings.temperatureUnit,
+                              normalizedInput.oven.pizzaOvenStoneTempF
+                            )
+                          })
+                        }
+                      />
+                      <Field
+                        label={t.topHeat}
+                        value={displayTemperatureValue(normalizedInput.oven.pizzaOvenTopTempF, settings.temperatureUnit)}
+                        suffix={`\u00B0${settings.temperatureUnit}`}
+                        onChange={(value) =>
+                          setOven({
+                            pizzaOvenTopTempF: parseTemperatureInput(
+                              value,
+                              settings.temperatureUnit,
+                              normalizedInput.oven.pizzaOvenTopTempF
+                            )
+                          })
+                        }
+                      />
+                    </>
+                  ) : null}
+                  {normalizedInput.oven.type === "deck-oven" ? (
+                    <Field
+                      label={t.deckTemp}
+                      value={displayTemperatureValue(normalizedInput.oven.deckOvenTempF, settings.temperatureUnit)}
+                      suffix={`\u00B0${settings.temperatureUnit}`}
+                      onChange={(value) =>
+                        setOven({
+                          deckOvenTempF: parseTemperatureInput(
+                            value,
+                            settings.temperatureUnit,
+                            normalizedInput.oven.deckOvenTempF
+                          )
+                        })
+                      }
+                    />
+                  ) : null}
+                  {normalizedInput.oven.type === "steel-stone" ? (
+                    <Toggle
+                      checked={normalizedInput.oven.useBroilerMethod}
+                      label={t.broilerFinish}
+                      onChange={(checked) => setOven({ useBroilerMethod: checked })}
+                    />
+                  ) : null}
+                  {normalizedInput.oven.type === "conventional" ? (
+                    <Toggle
+                      checked={normalizedInput.oven.useFinishingBroil}
+                      label={t.finishingBroil}
+                      onChange={(checked) => setOven({ useFinishingBroil: checked })}
+                    />
+                  ) : null}
+                </div>
+              </>
+            ) : null}
           </section>
 
           <section className="panel">
@@ -2863,139 +3026,149 @@ export function App() {
 
         <aside className="resultStack">
           <section className="panel recipeCard">
-            <PanelTitle icon={<Wheat size={18} />} label={t.formula} />
-            <div className="recipeHeader">
-              <div>
-                <p className="eyebrow">{activeStyle.origin}</p>
-                <h3>{displayRecipeName}</h3>
-                <p className="sectionMeta">{activeStyle.flourType}</p>
-              </div>
-              <div className="buttonRow noPrint">
-                <button className="ghostButton" type="button" onClick={copyShareText}>
-                  <Share2 size={16} />
-                  {t.copy}
-                </button>
-                <button className="ghostButton" type="button" onClick={exportRecipe}>
-                  <Download size={16} />
-                  {t.export}
-                </button>
-                <button className="ghostButton" type="button" onClick={printRecipe}>
-                  <Printer size={16} />
-                  {t.print}
-                </button>
-              </div>
-            </div>
+            <PanelTitle
+              icon={<Wheat size={18} />}
+              label={t.formula}
+              summary={panelSummaries.formula}
+              collapsed={!openPanels.formula}
+              collapseAction={renderPanelToggle("formula")}
+            />
+            {openPanels.formula ? (
+              <>
+                <div className="recipeHeader">
+                  <div>
+                    <p className="eyebrow">{activeStyle.origin}</p>
+                    <h3>{displayRecipeName}</h3>
+                    <p className="sectionMeta">{activeStyle.flourType}</p>
+                  </div>
+                  <div className="buttonRow noPrint">
+                    <button className="ghostButton" type="button" onClick={copyShareText}>
+                      <Share2 size={16} />
+                      {t.copy}
+                    </button>
+                    <button className="ghostButton" type="button" onClick={exportRecipe}>
+                      <Download size={16} />
+                      {t.export}
+                    </button>
+                    <button className="ghostButton" type="button" onClick={printRecipe}>
+                      <Printer size={16} />
+                      {t.print}
+                    </button>
+                  </div>
+                </div>
 
-            <div className="ingredientTable">
-              <Ingredient label={t.flour} value={`${result.ingredients.totalFlour}g`} pct="100%" />
-              <Ingredient
-                label={t.water}
-                value={`${result.ingredients.totalWater}g`}
-                pct={`${result.percentages.hydration}%`}
-                status={styleRange(result, "hydration", normalizedInput.hydrationPercent)}
-              />
-              <Ingredient
-                label={t.salt}
-                value={`${result.ingredients.totalSalt}g`}
-                pct={`${result.percentages.salt}%`}
-                status={styleRange(result, "salt", normalizedInput.saltPercent)}
-              />
-              <Ingredient label={t.yeast} value={`${result.ingredients.totalYeast}g`} pct={`${result.percentages.yeast}%`} />
-              {result.ingredients.totalOil > 0 ? (
-                <Ingredient
-                  label={t.oil}
-                  value={`${result.ingredients.totalOil}g`}
-                  pct={`${result.percentages.oil}%`}
-                  status={styleRange(result, "oil", normalizedInput.oilPercent)}
-                />
-              ) : null}
-              {result.ingredients.totalSugar > 0 ? (
-                <Ingredient
-                  label={t.sugar}
-                  value={`${result.ingredients.totalSugar}g`}
-                  pct={`${result.percentages.sugar}%`}
-                  status={styleRange(result, "sugar", normalizedInput.sugarPercent)}
-                />
-              ) : null}
-              {result.ingredients.totalHoney > 0 ? (
-                <Ingredient label={t.honey} value={`${result.ingredients.totalHoney}g`} pct={`${result.percentages.honey}%`} />
-              ) : null}
-              {result.ingredients.totalMalt > 0 ? (
-                <Ingredient label={t.malt} value={`${result.ingredients.totalMalt}g`} pct={`${result.percentages.malt}%`} />
-              ) : null}
-              {result.ingredients.totalLard > 0 ? (
-                <Ingredient label={t.lard} value={`${result.ingredients.totalLard}g`} pct={`${result.percentages.lard}%`} />
-              ) : null}
-              {result.ingredients.totalMilkPowder > 0 ? (
-                <Ingredient
-                  label={t.milkPowder}
-                  value={`${result.ingredients.totalMilkPowder}g`}
-                  pct={`${result.percentages.milkPowder}%`}
-                />
-              ) : null}
-            </div>
+                <div className="ingredientTable">
+                  <Ingredient label={t.flour} value={`${result.ingredients.totalFlour}g`} pct="100%" />
+                  <Ingredient
+                    label={t.water}
+                    value={`${result.ingredients.totalWater}g`}
+                    pct={`${result.percentages.hydration}%`}
+                    status={styleRange(result, "hydration", normalizedInput.hydrationPercent)}
+                  />
+                  <Ingredient
+                    label={t.salt}
+                    value={`${result.ingredients.totalSalt}g`}
+                    pct={`${result.percentages.salt}%`}
+                    status={styleRange(result, "salt", normalizedInput.saltPercent)}
+                  />
+                  <Ingredient label={t.yeast} value={`${result.ingredients.totalYeast}g`} pct={`${result.percentages.yeast}%`} />
+                  {result.ingredients.totalOil > 0 ? (
+                    <Ingredient
+                      label={t.oil}
+                      value={`${result.ingredients.totalOil}g`}
+                      pct={`${result.percentages.oil}%`}
+                      status={styleRange(result, "oil", normalizedInput.oilPercent)}
+                    />
+                  ) : null}
+                  {result.ingredients.totalSugar > 0 ? (
+                    <Ingredient
+                      label={t.sugar}
+                      value={`${result.ingredients.totalSugar}g`}
+                      pct={`${result.percentages.sugar}%`}
+                      status={styleRange(result, "sugar", normalizedInput.sugarPercent)}
+                    />
+                  ) : null}
+                  {result.ingredients.totalHoney > 0 ? (
+                    <Ingredient label={t.honey} value={`${result.ingredients.totalHoney}g`} pct={`${result.percentages.honey}%`} />
+                  ) : null}
+                  {result.ingredients.totalMalt > 0 ? (
+                    <Ingredient label={t.malt} value={`${result.ingredients.totalMalt}g`} pct={`${result.percentages.malt}%`} />
+                  ) : null}
+                  {result.ingredients.totalLard > 0 ? (
+                    <Ingredient label={t.lard} value={`${result.ingredients.totalLard}g`} pct={`${result.percentages.lard}%`} />
+                  ) : null}
+                  {result.ingredients.totalMilkPowder > 0 ? (
+                    <Ingredient
+                      label={t.milkPowder}
+                      value={`${result.ingredients.totalMilkPowder}g`}
+                      pct={`${result.percentages.milkPowder}%`}
+                    />
+                  ) : null}
+                </div>
 
-            <div className="summaryGrid">
-              <Metric label={t.doughBalls} value={`${normalizedInput.doughBalls}`} />
-              <Metric label={t.ballWeight} value={`${normalizedInput.ballWeight}g`} />
-              <Metric label={t.waterTemp} value={formatTemperature(result.waterTemperature.waterTempF, settings.temperatureUnit)} />
-              <Metric label={t.bake} value={formatTemperature(result.oven.tempF, settings.temperatureUnit)} />
-            </div>
+                <div className="summaryGrid">
+                  <Metric label={t.doughBalls} value={`${normalizedInput.doughBalls}`} />
+                  <Metric label={t.ballWeight} value={`${normalizedInput.ballWeight}g`} />
+                  <Metric label={t.waterTemp} value={formatTemperature(result.waterTemperature.waterTempF, settings.temperatureUnit)} />
+                  <Metric label={t.bake} value={formatTemperature(result.oven.tempF, settings.temperatureUnit)} />
+                </div>
 
-            <div className="splitBox">
-              <strong>{waterSummary.title}</strong>
-              <span>{waterSummary.useText}</span>
-              <span>{waterSummary.targetText}</span>
-              {result.waterTemperature.note ? (
-                <span>{localizeWaterMessage(result.waterTemperature.note, settings.language)}</span>
-              ) : null}
-            </div>
+                <div className="splitBox">
+                  <strong>{waterSummary.title}</strong>
+                  <span>{waterSummary.useText}</span>
+                  <span>{waterSummary.targetText}</span>
+                  {result.waterTemperature.note ? (
+                    <span>{localizeWaterMessage(result.waterTemperature.note, settings.language)}</span>
+                  ) : null}
+                </div>
 
-            {prefermentMode !== "none" ? (
-              <div className="splitBox">
-                <strong>{t.prefermentSplit}</strong>
-                <span>
-                  {prefermentName}: {normalizedInput.preferment.flourPercent}% = {prefermentFlourGrams}g {t.flour.toLowerCase()}, {result.ingredients.prefermentWater}g{" "}
-                  {t.water.toLowerCase()}, {result.ingredients.prefermentYeast}g {t.yeast.toLowerCase()}
-                </span>
-                <span>
-                  {t.mainDoughAdditions}: {mainDoughFlourGrams}g {t.additionalFlour}, {mainDoughWaterGrams}g {t.additionalWater},{" "}
-                  {mainDoughYeastGrams}g {t.additionalYeast}
-                </span>
-              </div>
-            ) : null}
-
-            {normalizedInput.flourBlendEnabled ? (
-              <div className="splitBox">
-                <strong>{t.flourBlend}</strong>
-                {blendBreakdown.map((item) => (
-                  <span key={`${item.flourId}-recipe`}>
-                    {item.flourLabel}: {item.totalGrams}g {t.totalLabel}
-                    {prefermentMode !== "none"
-                      ? `, ${item.prefermentGrams}g ${prefermentName}, ${item.mainDoughGrams}g ${t.mainDoughAdditions.toLowerCase()}`
-                      : ""}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-
-            {result.sauce ? (
-              <div className="splitBox">
-                <strong>{t.sauce}</strong>
-                <span>
-                  {localizedSelectedSauceOption?.name ?? result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, t)}: {result.sauce.perPizzaGrams}g / {settings.language === "de" ? "Pizza" : "pizza"}
-                </span>
-                <span>
-                  {settings.language === "de"
-                    ? `${result.sauce.totalGrams}g gesamt fuer den Batch`
-                    : `${result.sauce.totalGrams}g total for the batch`}
-                </span>
-                {localizedSelectedSauceOption?.source ? (
-                  <span>
-                    {sauceUi.source}: {localizedSelectedSauceOption.source}
-                  </span>
+                {prefermentMode !== "none" ? (
+                  <div className="splitBox">
+                    <strong>{t.prefermentSplit}</strong>
+                    <span>
+                      {prefermentName}: {normalizedInput.preferment.flourPercent}% = {prefermentFlourGrams}g {t.flour.toLowerCase()}, {result.ingredients.prefermentWater}g{" "}
+                      {t.water.toLowerCase()}, {result.ingredients.prefermentYeast}g {t.yeast.toLowerCase()}
+                    </span>
+                    <span>
+                      {t.mainDoughAdditions}: {mainDoughFlourGrams}g {t.additionalFlour}, {mainDoughWaterGrams}g {t.additionalWater},{" "}
+                      {mainDoughYeastGrams}g {t.additionalYeast}
+                    </span>
+                  </div>
                 ) : null}
-              </div>
+
+                {normalizedInput.flourBlendEnabled ? (
+                  <div className="splitBox">
+                    <strong>{t.flourBlend}</strong>
+                    {blendBreakdown.map((item) => (
+                      <span key={`${item.flourId}-recipe`}>
+                        {item.flourLabel}: {item.totalGrams}g {t.totalLabel}
+                        {prefermentMode !== "none"
+                          ? `, ${item.prefermentGrams}g ${prefermentName}, ${item.mainDoughGrams}g ${t.mainDoughAdditions.toLowerCase()}`
+                          : ""}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+
+                {result.sauce ? (
+                  <div className="splitBox">
+                    <strong>{t.sauce}</strong>
+                    <span>
+                      {localizedSelectedSauceOption?.name ?? result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, t)}: {result.sauce.perPizzaGrams}g / {settings.language === "de" ? "Pizza" : "pizza"}
+                    </span>
+                    <span>
+                      {settings.language === "de"
+                        ? `${result.sauce.totalGrams}g gesamt fuer den Batch`
+                        : `${result.sauce.totalGrams}g total for the batch`}
+                    </span>
+                    {localizedSelectedSauceOption?.source ? (
+                      <span>
+                        {sauceUi.source}: {localizedSelectedSauceOption.source}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+              </>
             ) : null}
           </section>
 
@@ -3027,30 +3200,40 @@ export function App() {
           </section>
 
           <section className="panel">
-            <PanelTitle icon={<AlertCircle size={18} />} label={t.guidance} />
-            <div className="guidanceGrid">
-              <Metric label={t.effectiveFerment} value={`${result.effectiveFermentationHours}h`} />
-              <Metric label={t.totalTime} value={`${result.totalFermentationHours}h`} />
-              <Metric label={t.waterTemp} value={formatTemperature(result.waterTemperature.waterTempF, settings.temperatureUnit)} />
-              <Metric label={t.targetFdt} value={formatTemperature(result.waterTemperature.targetFdtF, settings.temperatureUnit)} />
-              <Metric label={t.bake} value={formatTemperature(result.oven.tempF, settings.temperatureUnit)} />
-              <Metric
-                label={t.bakeTime}
-                value={`${result.oven.minTime}-${result.oven.maxTime} ${settings.language === "de" ? (result.oven.unit === "seconds" ? "Sek." : "Min.") : result.oven.unit}`}
-              />
-            </div>
-            {ovenDetail ? <Notice tone="notice">{ovenDetail}</Notice> : null}
-            {result.waterTemperature.warning ? (
-              <Notice tone="warning">{localizeWaterMessage(result.waterTemperature.warning, settings.language)}</Notice>
-            ) : null}
-            {result.waterTemperature.note ? (
-              <Notice tone="notice">{localizeWaterMessage(result.waterTemperature.note, settings.language)}</Notice>
-            ) : null}
-            {result.flourBlend.warning ? <Notice tone={result.flourBlend.warningColor}>{result.flourBlend.warning}</Notice> : null}
-            {result.pan ? (
-              <Notice tone="notice">
-                {t.panGeometry}: {formatArea(result.pan.areaSqIn, settings.sizeUnit)}, {t.depth.toLowerCase()} {normalizedInput.pan.depth}{getLengthSuffix(settings.sizeUnit)}
-              </Notice>
+            <PanelTitle
+              icon={<AlertCircle size={18} />}
+              label={t.guidance}
+              summary={panelSummaries.guidance}
+              collapsed={!openPanels.guidance}
+              collapseAction={renderPanelToggle("guidance")}
+            />
+            {openPanels.guidance ? (
+              <>
+                <div className="guidanceGrid">
+                  <Metric label={t.effectiveFerment} value={`${result.effectiveFermentationHours}h`} />
+                  <Metric label={t.totalTime} value={`${result.totalFermentationHours}h`} />
+                  <Metric label={t.waterTemp} value={formatTemperature(result.waterTemperature.waterTempF, settings.temperatureUnit)} />
+                  <Metric label={t.targetFdt} value={formatTemperature(result.waterTemperature.targetFdtF, settings.temperatureUnit)} />
+                  <Metric label={t.bake} value={formatTemperature(result.oven.tempF, settings.temperatureUnit)} />
+                  <Metric
+                    label={t.bakeTime}
+                    value={`${result.oven.minTime}-${result.oven.maxTime} ${settings.language === "de" ? (result.oven.unit === "seconds" ? "Sek." : "Min.") : result.oven.unit}`}
+                  />
+                </div>
+                {ovenDetail ? <Notice tone="notice">{ovenDetail}</Notice> : null}
+                {result.waterTemperature.warning ? (
+                  <Notice tone="warning">{localizeWaterMessage(result.waterTemperature.warning, settings.language)}</Notice>
+                ) : null}
+                {result.waterTemperature.note ? (
+                  <Notice tone="notice">{localizeWaterMessage(result.waterTemperature.note, settings.language)}</Notice>
+                ) : null}
+                {result.flourBlend.warning ? <Notice tone={result.flourBlend.warningColor}>{result.flourBlend.warning}</Notice> : null}
+                {result.pan ? (
+                  <Notice tone="notice">
+                    {t.panGeometry}: {formatArea(result.pan.areaSqIn, settings.sizeUnit)}, {t.depth.toLowerCase()} {normalizedInput.pan.depth}{getLengthSuffix(settings.sizeUnit)}
+                  </Notice>
+                ) : null}
+              </>
             ) : null}
           </section>
 
@@ -3058,6 +3241,8 @@ export function App() {
             <PanelTitle
               icon={<FlaskConical size={18} />}
               label={t.method}
+              summary={panelSummaries.method}
+              collapsed={!openPanels.method}
               action={
                 <button
                   className={`ghostButton ${copyMethodState === "copied" ? "successState" : copyMethodState === "failed" ? "errorState" : ""}`}
@@ -3078,12 +3263,15 @@ export function App() {
                       : sauceUi.copyMethod}
                 </button>
               }
+              collapseAction={renderPanelToggle("method")}
             />
-            <ol className="methodList">
-              {methodSteps.map((instruction) => (
-                <li key={instruction}>{instruction}</li>
-              ))}
-            </ol>
+            {openPanels.method ? (
+              <ol className="methodList">
+                {methodSteps.map((instruction) => (
+                  <li key={instruction}>{instruction}</li>
+                ))}
+              </ol>
+            ) : null}
           </section>
 
           <section className="panel noPrint">

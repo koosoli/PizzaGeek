@@ -40,6 +40,27 @@ describe("calculateDough", () => {
     expect(result.oven.detail).toContain("top 930F");
   });
 
+  it("adds the whole-grain double-preferment variant as a contemporary neapolitan preset", () => {
+    const input = createDefaultInput(STYLE_IDS.CONTEMPORARY_NEAPOLITAN_DOUBLE_PREFERMENT_WHOLE_GRAIN);
+    const result = calculateDough(input);
+
+    expect(result.style.name).toBe("Contemporary Neapolitan - Double Preferment Whole Grain");
+    expect(input.doughBalls).toBe(7);
+    expect(input.ballWeight).toBe(255);
+    expect(input.hydrationPercent).toBe(75);
+    expect(input.saltPercent).toBe(3);
+    expect(input.yeastType).toBe("fresh");
+    expect(input.manualYeastPercent).toBe(0.9);
+    expect(input.flourBlend).toEqual([
+      { flourId: "caputo-nuvola", percentage: 90 },
+      { flourId: "whole-wheat", percentage: 10 }
+    ]);
+    expect(input.fermentation.coldBallHours).toBe(14);
+    expect(input.fermentation.finalRiseHours).toBe(1);
+    expect(result.sauce?.style).toBe("raw");
+    expect(result.oven.unit).toBe("seconds");
+  });
+
   it("includes sauce guidance when sauce is enabled", () => {
     const input = createDefaultInput(STYLE_IDS.NEW_YORK);
     const result = calculateDough(input);

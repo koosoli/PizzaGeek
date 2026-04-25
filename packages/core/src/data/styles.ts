@@ -3,6 +3,7 @@ import type { OvenType, PizzaStyle } from "../domain/types";
 export const STYLE_IDS = {
   NEAPOLITAN: "neapolitan",
   CONTEMPORARY_NEAPOLITAN: "contemporary-neapolitan",
+  CONTEMPORARY_NEAPOLITAN_DOUBLE_PREFERMENT_WHOLE_GRAIN: "contemporary-neapolitan-double-preferment-whole-grain",
   ROMAN: "roman-al-taglio",
   PIZZA_ALLA_PALA: "pizza-alla-pala",
   SICILIAN: "sicilian",
@@ -37,10 +38,14 @@ const style = (
   defaultOven: OvenType,
   defaultBallWeight: number,
   defaultBallCount: number,
-  panStyle = false
+  panStyle = false,
+  parentStyleId?: string,
+  variantLabel?: string
 ): PizzaStyle => ({
   id,
   name,
+  parentStyleId,
+  variantLabel,
   origin,
   flourType,
   profile,
@@ -98,6 +103,27 @@ export const PIZZA_STYLES: PizzaStyle[] = [
     "pizza-oven",
     270,
     4
+  ),
+  style(
+    STYLE_IDS.CONTEMPORARY_NEAPOLITAN_DOUBLE_PREFERMENT_WHOLE_GRAIN,
+    "Contemporary Neapolitan - Double Preferment Whole Grain",
+    "Naples, Italy",
+    "Tipo 0 with 10% Whole Wheat",
+    "Contemporary Neapolitan variant inspired by a stiff tipo 0 pre-ferment and a whole-wheat poolish; modeled here with the same blend, hydration, and short cold finish.",
+    [72, 75, 78],
+    [2.8, 3, 3.2],
+    [0, 0, 1],
+    [0, 0, 0],
+    [12, 15, 24],
+    true,
+    [780, 860, 950],
+    [75, 120, "seconds"],
+    "pizza-oven",
+    255,
+    7,
+    false,
+    STYLE_IDS.CONTEMPORARY_NEAPOLITAN,
+    "Double Preferment Whole Grain"
   ),
   style(
     STYLE_IDS.ROMAN,

@@ -33,7 +33,11 @@ const MIXER_FRICTION_F: Record<MixerType, number> = {
 };
 
 function isNeapolitanFamily(styleId: string): boolean {
-  return styleId === STYLE_IDS.NEAPOLITAN || styleId === STYLE_IDS.CONTEMPORARY_NEAPOLITAN;
+  return (
+    styleId === STYLE_IDS.NEAPOLITAN ||
+    styleId === STYLE_IDS.CONTEMPORARY_NEAPOLITAN ||
+    styleId === STYLE_IDS.CONTEMPORARY_NEAPOLITAN_DOUBLE_PREFERMENT_WHOLE_GRAIN
+  );
 }
 
 export function clamp(value: number, min: number, max: number): number {
@@ -242,10 +246,11 @@ export function getOvenBakeProfile(style: PizzaStyle, oven: OvenOptions, pan?: P
     const neapolitanStyle = isNeapolitanFamily(style.id);
     const fast = neapolitanStyle ? stoneTemp >= 800 && topTemp >= 800 : temp >= 850;
     const minTime = fast
-      ? neapolitanStyle
-        ? style.id === STYLE_IDS.CONTEMPORARY_NEAPOLITAN
-          ? 75
-          : 90
+        ? neapolitanStyle
+          ? style.id === STYLE_IDS.CONTEMPORARY_NEAPOLITAN ||
+            style.id === STYLE_IDS.CONTEMPORARY_NEAPOLITAN_DOUBLE_PREFERMENT_WHOLE_GRAIN
+            ? 75
+            : 90
         : 90
       : temp >= 800
         ? 2
@@ -266,8 +271,20 @@ export function getOvenBakeProfile(style: PizzaStyle, oven: OvenOptions, pan?: P
     return {
       tempF: seconds ? 900 : 700,
       tempC: fahrenheitToCelsius(seconds ? 900 : 700),
-      minTime: seconds ? (style.id === STYLE_IDS.CONTEMPORARY_NEAPOLITAN ? 75 : 60) : Math.max(2, style.cookTime.min - 4),
-      maxTime: seconds ? (style.id === STYLE_IDS.CONTEMPORARY_NEAPOLITAN ? 120 : 90) : Math.max(4, style.cookTime.max - 6),
+      minTime:
+        seconds
+          ? style.id === STYLE_IDS.CONTEMPORARY_NEAPOLITAN ||
+            style.id === STYLE_IDS.CONTEMPORARY_NEAPOLITAN_DOUBLE_PREFERMENT_WHOLE_GRAIN
+            ? 75
+            : 60
+          : Math.max(2, style.cookTime.min - 4),
+      maxTime:
+        seconds
+          ? style.id === STYLE_IDS.CONTEMPORARY_NEAPOLITAN ||
+            style.id === STYLE_IDS.CONTEMPORARY_NEAPOLITAN_DOUBLE_PREFERMENT_WHOLE_GRAIN
+            ? 120
+            : 90
+          : Math.max(4, style.cookTime.max - 6),
       unit: seconds ? "seconds" : "minutes"
     };
   }

@@ -374,6 +374,22 @@ h3 {
   gap: 10px;
 }
 
+.styleGroupCard {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 58px;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.02);
+  min-height: 178px;
+}
+
+.styleGroupCard.activeFamily {
+  border-color: rgba(196, 90, 43, 0.26);
+  background: linear-gradient(180deg, rgba(196, 90, 43, 0.08), rgba(196, 90, 43, 0.01)), rgba(255, 255, 255, 0.02);
+}
+
 .styleButton,
 .savedItem {
   width: 100%;
@@ -422,6 +438,48 @@ h3 {
   border-color: rgba(196, 90, 43, 0.38);
   background: linear-gradient(180deg, rgba(196, 90, 43, 0.14), rgba(196, 90, 43, 0.02)), var(--surface-strong);
   box-shadow: 0 14px 28px rgba(131, 65, 28, 0.12);
+}
+
+.stylePrimaryButton {
+  min-height: 0;
+  height: 100%;
+  align-content: start;
+}
+
+.styleVariantFooter {
+  display: grid;
+  align-content: end;
+  gap: 6px;
+  min-height: 58px;
+}
+
+.styleVariantHeading {
+  margin: 0;
+  padding: 0 2px;
+  color: var(--soft);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.styleVariantSelect {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.styleGroupCard.activeFamily .styleVariantSelect {
+  border-color: rgba(196, 90, 43, 0.28);
+}
+
+.styleVariantPlaceholder {
+  min-height: 38px;
 }
 
 .fieldGrid {

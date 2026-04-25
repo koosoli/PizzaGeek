@@ -2723,6 +2723,7 @@ export const STYLE_SAUCE_COLLECTIONS: StyleSauceCollection[] = [
 
 const STYLE_SAUCE_MAP: Record<string, string> = {
   "contemporary-neapolitan": "neapolitan",
+  "contemporary-neapolitan-double-preferment-whole-grain": "neapolitan",
   "roman-al-taglio": "roman",
   "pizza-alla-pala": "roman",
   "chicago-deep-dish": "chicago",
