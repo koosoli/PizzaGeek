@@ -117,6 +117,79 @@ const DEFAULT_SETTINGS: AppSettings = {
   theme: "dark"
 };
 
+const LOCALE_DEFAULTS = {
+  en: { temperatureUnit: "F", sizeUnit: "in", currency: "USD" },
+  de: { temperatureUnit: "C", sizeUnit: "cm", currency: "EUR" }
+} as const;
+
+function getLocaleDefaults(locale: LocaleCode) {
+  return LOCALE_DEFAULTS[locale];
+}
+
+function getDefaultRecipeName(styleId: string, locale: LocaleCode) {
+  const styleName = getStyleById(styleId)?.name ?? "Pizza";
+  return `${styleName} ${locale === "de" ? "Teig" : "dough"}`;
+}
+
+function isAutoRecipeName(name: string, styleId: string) {
+  const trimmed = name.trim();
+  const styleName = getStyleById(styleId)?.name ?? "Pizza";
+  return new Set(["House dough", styleName, `${styleName} dough`, `${styleName} Teig`]).has(trimmed);
+}
+
+function getRecipeDisplayName(recipeName: string, styleId: string, locale: LocaleCode) {
+  return recipeName.trim() || getDefaultRecipeName(styleId, locale);
+}
+
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fall through to the legacy copy path below.
+  }
+
+  if (typeof document === "undefined") return false;
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.top = "0";
+  textarea.style.left = "-9999px";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+
+  const selection = document.getSelection();
+  const previousRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+  const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } catch {
+    copied = false;
+  }
+
+  document.body.removeChild(textarea);
+
+  if (selection) {
+    selection.removeAllRanges();
+    if (previousRange) {
+      selection.addRange(previousRange);
+    }
+  }
+
+  activeElement?.focus();
+  return copied;
+}
+
 const copy = {
   en: {
     brand: "Pizza Geek",
@@ -277,7 +350,7 @@ const copy = {
     language: "Sprache",
     temperatureUnit: "Temperatur",
     sizeUnit: "Laengeneinheit",
-    english: "English",
+    english: "Englisch",
     german: "Deutsch",
     dark: "Dunkel",
     light: "Hell",
@@ -285,7 +358,7 @@ const copy = {
     celsius: "Celsius",
     styles: "Stile",
     doughSetup: "Teig-Setup",
-    fermentation: "Fermentation",
+    fermentation: "Gare",
     doughStudio: "Vorteig & Mehl",
     bakeSurface: "Form & Backen",
     ovenProfile: "Ofenprofil",
@@ -301,7 +374,7 @@ const copy = {
     ballWeight: "Teiglingsgewicht",
     hydration: "Hydration",
     salt: "Salz",
-    oil: "Ol",
+    oil: "Oel",
     sugar: "Zucker",
     honey: "Honig",
     malt: "Malz",
@@ -402,8 +475,8 @@ const copy = {
     noPhoto: "Noch kein Foto",
     flourCost: "Mehl / kg",
     yeastCost: "Hefe / kg",
-    oilCost: "Ol / kg",
-    currency: "Wahrung",
+    oilCost: "Oel / kg",
+    currency: "Waehrung",
     hydrationFit: "Hydration",
     saltBalance: "Salzbalance",
     fermentPlan: "Gareplan",
@@ -761,7 +834,9 @@ function formatBakeWindow(
   const durationUnit = locale === "de" ? (oven.unit === "seconds" ? "Sek." : "Min.") : oven.unit;
   return detail
     ? `${detail}, ${oven.minTime}-${oven.maxTime} ${durationUnit}`
-    : `${oven.minTime}-${oven.maxTime} ${durationUnit} @ ${formatTemperature(oven.tempF, unit)}`;
+    : locale === "de"
+      ? `${oven.minTime}-${oven.maxTime} ${durationUnit} bei ${formatTemperature(oven.tempF, unit)}`
+      : `${oven.minTime}-${oven.maxTime} ${durationUnit} @ ${formatTemperature(oven.tempF, unit)}`;
 }
 
 function getWaterSummaryText(result: DoughResult, locale: LocaleCode, unit: TemperatureUnit) {
@@ -803,16 +878,16 @@ function getFermentationStageContent(
   const de = {
     bulk: { title: "Stockgare", subtitle: "bei Raumtemperatur" },
     temper: { title: "Temperieren", subtitle: "vor dem Backen akklimatisieren" },
-    "cold-ball": { title: "Kalte Stuckgare", subtitle: "geformte Teiglinge im Kuhlschrank" },
+    "cold-ball": { title: "Kalte Stueckgare", subtitle: "geformte Teiglinge im Kuehlschrank" },
     "cold-bulk": {
       title: "Kalte Stockgare",
-      subtitle: "Teig als Masse im Kuhlschrank",
+      subtitle: "Teig als Masse im Kuehlschrank",
       note: "Erst als Masse kalt fuhren, danach teilen und rundschleifen. Das bringt bei langen, weichen Teigen oft mehr Struktur."
     },
     cellar: {
       title: "Kellergare",
       subtitle: "10-18°C / 50-65°F",
-      note: "Europaische Methode - langsamer als Raumtemperatur, warmer als der Kuhlschrank."
+      note: "Europaische Methode - langsamer als Raumtemperatur, waermer als der Kuehlschrank."
     }
   } as const;
 
@@ -847,6 +922,46 @@ function getSauceUiCopy(locale: LocaleCode) {
       };
 }
 
+const LOCALIZED_SAUCE_OPTIONS: Partial<Record<LocaleCode, Record<string, Partial<SauceRecipeOption>>>> = {
+  de: {
+    "neapolitan-primary": {
+      cookType: "ungekocht",
+      ingredients: [
+        { item: "San-Marzano-Tomaten (DOP)", amount: "400g", note: "Ganz, geschaelt" },
+        { item: "Meersalz", amount: "Nach Geschmack", note: "Zuerst pruefen, ob die Tomaten schon gesalzen sind" },
+        { item: "Frische Basilikumblaetter", amount: "4-5 Blaetter", note: "Gezupft, nicht gehackt" },
+        { item: "Natives Olivenoel extra", amount: "Ein kleiner Schuss", note: "Hochwertig" }
+      ],
+      instructions: [
+        "Tomaten direkt in eine Schuessel von Hand zerdruecken - keinen Mixer oder Food Processor verwenden. Die Sauce soll Struktur haben, kein Pueree sein.",
+        "Salz sparsam zugeben (die Tomaten vorher probieren - viele sind bereits vorgesalzen).",
+        "Basilikumblaetter zerzupfen und vorsichtig unterheben.",
+        "Olivenoel erst direkt vor der Verwendung daruebergeben.",
+        "Sofort verwenden oder bis zu 3 Tage im Kuehlschrank lagern. Nicht kochen."
+      ],
+      proTip:
+        "Echte neapolitanische Sauce bleibt roh. Der 90-Sekunden-Backvorgang im 900°F-Ofen \"gart\" die Sauce perfekt. Vorheriges Kochen macht den Geschmack stumpf und uebergart."
+    }
+  }
+};
+
+function localizeSauceOption(option: SauceRecipeOption | undefined, locale: LocaleCode): SauceRecipeOption | undefined {
+  if (!option || locale === "en") return option;
+  const localized = LOCALIZED_SAUCE_OPTIONS[locale]?.[option.id];
+  return localized ? { ...option, ...localized } : option;
+}
+
+function localizeSauceSaltWarning(message: string, locale: LocaleCode): string {
+  if (locale === "en") return message;
+
+  const translations: Record<string, string> = {
+    "Always check your canned tomato label before adding salt. Many brands (Cento, La Valle, etc.) already contain salt. Taste first, adjust later.":
+      "Vor dem Salzen immer das Etikett der Dosentomaten pruefen. Viele Marken (Cento, La Valle usw.) enthalten bereits Salz. Erst probieren, dann anpassen."
+  };
+
+  return translations[message] ?? message;
+}
+
 function getEnrichmentHint(
   key: "oil" | "sugar" | "honey" | "malt" | "lard" | "milk-powder",
   locale: LocaleCode,
@@ -866,7 +981,7 @@ function getEnrichmentHint(
     case "malt":
       return locale === "de" ? "Typisch: 0.5-1%" : "Typical: 0.5-1%";
     case "lard":
-      return locale === "de" ? "Alternative zu Ol" : "Alternative to oil";
+      return locale === "de" ? "Alternative zu Oel" : "Alternative to oil";
     case "milk-powder":
       return locale === "de" ? "Typisch: 1-2%" : "Typical: 1-2%";
     default:
@@ -996,7 +1111,7 @@ function localizePlanStep(
       return locale === "de"
         ? {
             label: `${prefermentName} kalt fuhren`,
-            description: `${input.preferment.coldHours}h im Kuhlschrank.`
+            description: `${input.preferment.coldHours}h im Kuehlschrank.`
           }
         : {
             label: `${prefermentName} Cold Ferment`,
@@ -1065,7 +1180,7 @@ function localizePlanStep(
     case "Cold Ball":
       return locale === "de"
         ? {
-            label: "Kalte Stuckgare",
+            label: "Kalte Stueckgare",
             description: `${input.fermentation.coldBallHours}h bei etwa ${fridgeTemp}.`
           }
         : {
@@ -1085,7 +1200,7 @@ function localizePlanStep(
     case "Ball Proof":
       return locale === "de"
         ? {
-            label: "Stuckgare",
+            label: "Stueckgare",
             description: `${input.fermentation.finalRiseHours}h Endgare vor dem Backen.`
           }
         : {
@@ -1117,7 +1232,7 @@ function getMethodSteps(
   const water = result.waterTemperature;
   const ingredients = result.ingredients;
   const prefermentName = getPrefermentDisplayName(input, locale);
-  const sauceOption = getSauceOption(input.styleId, input.sauce.recipeId);
+  const sauceOption = localizeSauceOption(getSauceOption(input.styleId, input.sauce.recipeId), locale);
   const waterSummary = getWaterSummaryText(result, locale, unit);
   const bakeDetail = getOvenDetailText(input, copy[locale], unit);
   const bakeWindow = formatBakeWindow(result.oven, locale, unit, bakeDetail);
@@ -1153,7 +1268,7 @@ function getMethodSteps(
   );
 
   const enrichments = [
-    ingredients.totalOil > 0 ? `${ingredients.totalOil}g Ã–l` : null,
+    ingredients.totalOil > 0 ? `${ingredients.totalOil}g Oel` : null,
     ingredients.totalLard > 0 ? `${ingredients.totalLard}g Schmalz` : null,
     ingredients.totalSugar > 0 ? `${ingredients.totalSugar}g Zucker` : null,
     ingredients.totalHoney > 0 ? `${ingredients.totalHoney}g Honig` : null,
@@ -1180,7 +1295,7 @@ function getMethodSteps(
   } else {
     steps.push(
       locale === "de"
-        ? "Auf niedriger Stufe mischen, dann auf mittlerer Stufe auskneten, bis der Teig sauber von der Schussel lost."
+        ? "Auf niedriger Stufe mischen, dann auf mittlerer Stufe auskneten, bis sich der Teig sauber von der Schuessel loest."
         : "Mix on low until combined, then on medium-low until the dough clears the bowl and feels cohesive."
     );
   }
@@ -1204,7 +1319,7 @@ function getMethodSteps(
   if (input.fermentation.coldBulkHours > 0) {
     steps.push(
       locale === "de"
-        ? `Kalte Stockgare ${input.fermentation.coldBulkHours}h im Kuhlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}. Danach teilen und rundschleifen.`
+        ? `Kalte Stockgare ${input.fermentation.coldBulkHours}h im Kuehlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}. Danach teilen und rundschleifen.`
         : `Cold bulk ${input.fermentation.coldBulkHours}h @ ${formatTemperature(input.fermentation.fridgeTempF, unit)} as one mass, then divide and ball.`
     );
   }
@@ -1223,7 +1338,7 @@ function getMethodSteps(
   if (input.fermentation.coldBallHours > 0) {
     steps.push(
       locale === "de"
-        ? `Kalte Stuckgare ${input.fermentation.coldBallHours}h im Kuhlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}.`
+        ? `Kalte Stueckgare ${input.fermentation.coldBallHours}h im Kuehlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}.`
         : `Cold ball ${input.fermentation.coldBallHours}h @ ${formatTemperature(input.fermentation.fridgeTempF, unit)} after dividing.`
     );
   }
@@ -1231,7 +1346,7 @@ function getMethodSteps(
   if (result.style.panStyle) {
     steps.push(
       locale === "de"
-        ? "Die Form grosszugig olen, den Teig einlegen und vor dem finalen Ausziehen entspannt aufgehen lassen."
+        ? "Die Form grosszuegig oelen, den Teig einlegen und vor dem finalen Ausziehen entspannt aufgehen lassen."
         : "Oil the pan generously, place the dough in it, and proof until relaxed before the final stretch."
     );
   }
@@ -1247,7 +1362,7 @@ function getMethodSteps(
   if (result.sauce) {
     steps.push(
       locale === "de"
-        ? `Sauce vorbereiten: ${result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, copy.de)}. Etwa ${result.sauce.perPizzaGrams}g pro Pizza verwenden, insgesamt ${result.sauce.totalGrams}g fur den Batch.`
+        ? `Sauce vorbereiten: ${sauceOption?.name ?? result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, copy.de)}. Etwa ${result.sauce.perPizzaGrams}g pro Pizza verwenden, insgesamt ${result.sauce.totalGrams}g fuer den Batch.`
         : `Prepare the sauce: ${result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, copy.en)}. Use about ${result.sauce.perPizzaGrams}g per pizza, ${result.sauce.totalGrams}g total.`
     );
 
@@ -1260,7 +1375,7 @@ function getMethodSteps(
 
   steps.push(
     locale === "de"
-      ? `Backen mit ${bakeWindow}, bis Boden und Rand sauber ausgebacken sind und die Oberflache die gewunschte Farbe hat.`
+      ? `Backen mit ${bakeWindow}, bis Boden und Rand sauber ausgebacken sind und die Oberflaeche die gewuenschte Farbe hat.`
       : `Bake with ${bakeWindow} until the bottom is crisp and the top is properly browned.`
   );
 
@@ -1384,7 +1499,9 @@ export function App() {
     return toLocalDateTimeInputValue(date);
   });
   const [copyMethodState, setCopyMethodState] = useState<"idle" | "copied" | "failed">("idle");
-  const [recipeName, setRecipeName] = useState("House dough");
+  const [recipeName, setRecipeName] = useState(() =>
+    getDefaultRecipeName(normalizeCalculatorInput(input).styleId, storedSettings.language === "de" ? "de" : "en")
+  );
   const [logDraft, setLogDraft] = useState<{
     rating: number;
     outcome: BakeLogEntry["outcome"];
@@ -1397,12 +1514,24 @@ export function App() {
     notes: ""
   });
 
-  const settings = useMemo(
+  const settings = useMemo(() => {
+    const persistedSettings = storedSettings as Partial<AppSettings>;
+    const language = persistedSettings.language === "de" ? "de" : DEFAULT_SETTINGS.language;
+    const localeDefaults = getLocaleDefaults(language);
+    return {
+      language,
+      temperatureUnit: localeDefaults.temperatureUnit,
+      sizeUnit: localeDefaults.sizeUnit,
+      theme: DEFAULT_SETTINGS.theme,
+      ...persistedSettings
+    };
+  }, [storedSettings]);
+  const resolvedCostSettings = useMemo(
     () => ({
-      ...DEFAULT_SETTINGS,
-      ...storedSettings
+      ...defaultCostSettings(getLocaleDefaults(settings.language).currency),
+      ...costSettings
     }),
-    [storedSettings]
+    [costSettings, settings.language]
   );
   const t = copy[settings.language];
   const sauceUi = getSauceUiCopy(settings.language);
@@ -1424,6 +1553,14 @@ export function App() {
     () => getSauceOption(normalizedInput.styleId, normalizedInput.sauce.recipeId),
     [normalizedInput.sauce.recipeId, normalizedInput.styleId]
   );
+  const localizedSauceOptions = useMemo(
+    () => selectedSauceCollection?.options.map((option) => localizeSauceOption(option, settings.language) ?? option) ?? [],
+    [selectedSauceCollection, settings.language]
+  );
+  const localizedSelectedSauceOption = useMemo(
+    () => localizeSauceOption(selectedSauceOption, settings.language),
+    [selectedSauceOption, settings.language]
+  );
   const prefermentMode = getPrefermentMode(normalizedInput);
   const prefermentName = getPrefermentDisplayName(normalizedInput, settings.language);
   const prefermentFlourGrams = prefermentMode === "none" ? 0 : (result.ingredients.prefermentFlour ?? 0);
@@ -1433,9 +1570,10 @@ export function App() {
   const activeStyle = result.style;
   const usesPanGeometry = Boolean(activeStyle.panStyle);
   const cost = useMemo(
-    () => calculateCost(result, costSettings, normalizedInput.doughBalls),
-    [costSettings, normalizedInput.doughBalls, result]
+    () => calculateCost(result, resolvedCostSettings, normalizedInput.doughBalls),
+    [normalizedInput.doughBalls, resolvedCostSettings, result]
   );
+  const displayRecipeName = getRecipeDisplayName(recipeName, normalizedInput.styleId, settings.language);
   const qualitySignals = useMemo(
     () => buildQualitySignals(result, normalizedInput, settings, t),
     [normalizedInput, result, settings, t]
@@ -1512,10 +1650,10 @@ export function App() {
     document.documentElement.lang = settings.language;
     document.documentElement.dataset.theme = settings.theme;
     document.documentElement.style.colorScheme = settings.theme;
-    document.title = `${activeStyle.name} | ${BRAND_NAME}`;
+    document.title = `${displayRecipeName} | ${BRAND_NAME}`;
     const themeColor = document.querySelector('meta[name="theme-color"]');
     themeColor?.setAttribute("content", settings.theme === "dark" ? "#171717" : "#f1eee6");
-  }, [activeStyle.name, settings.language, settings.theme]);
+  }, [displayRecipeName, settings.language, settings.theme]);
 
   useEffect(() => {
     const serializedCurrent = JSON.stringify(input);
@@ -1608,6 +1746,34 @@ export function App() {
     }));
   };
 
+  const updateLanguage = (nextLanguage: LocaleCode) => {
+    const localeDefaults = getLocaleDefaults(nextLanguage);
+    setSettings((current) => ({
+      ...DEFAULT_SETTINGS,
+      ...current,
+      language: nextLanguage,
+      temperatureUnit: localeDefaults.temperatureUnit,
+      sizeUnit: localeDefaults.sizeUnit
+    }));
+    setInput((current) => {
+      const normalized = normalizeCalculatorInput(current);
+      return {
+        ...normalized,
+        pan: convertPanToUnit(normalized.pan, localeDefaults.sizeUnit)
+      };
+    });
+    setCostSettings((current) => ({
+      ...defaultCostSettings(localeDefaults.currency),
+      ...current,
+      currency: localeDefaults.currency
+    }));
+    setRecipeName((current) =>
+      current.trim() === "" || isAutoRecipeName(current, normalizedInput.styleId)
+        ? getDefaultRecipeName(normalizedInput.styleId, nextLanguage)
+        : current
+    );
+  };
+
   const updateSizeUnit = (nextUnit: SizeUnit) => {
     setSettings((current) => ({
       ...DEFAULT_SETTINGS,
@@ -1628,7 +1794,7 @@ export function App() {
     next.pan = convertPanToUnit(next.pan, settings.sizeUnit);
     setInput(next);
     setPreset(choosePresetForStyle(styleId));
-    setRecipeName(`${getStyleById(styleId)?.name ?? "Pizza"} dough`);
+    setRecipeName(getDefaultRecipeName(styleId, settings.language));
   };
 
   const onPresetChange = (key: FermentationPresetKey) => {
@@ -1703,7 +1869,7 @@ export function App() {
   const saveRecipe = () => {
     const saved: SavedRecipe = {
       id: crypto.randomUUID(),
-      name: recipeName.trim() || `${activeStyle.name} dough`,
+      name: displayRecipeName,
       createdAt: new Date().toISOString(),
       input: normalizedInput
     };
@@ -1711,22 +1877,25 @@ export function App() {
   };
 
   const exportRecipe = () => {
-    const payload = JSON.stringify({ name: recipeName, input: normalizedInput, result }, null, 2);
+    const payload = JSON.stringify({ name: displayRecipeName, input: normalizedInput, result }, null, 2);
     const blob = new Blob([payload], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `${recipeName.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "pizza-geek-recipe"}.json`;
+    anchor.download = `${displayRecipeName.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "pizza-geek-recipe"}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
 
   const copyShareText = async () => {
+    const bakeTimeUnit = settings.language === "de" ? (result.oven.unit === "seconds" ? "Sek." : "Min.") : result.oven.unit;
     const lines = [
-      `${recipeName || activeStyle.name}`,
+      displayRecipeName,
       `${normalizedInput.doughBalls} x ${normalizedInput.ballWeight}g, ${result.percentages.hydration}% hydration`,
       `${t.flour} ${result.ingredients.totalFlour}g, ${t.water} ${result.ingredients.totalWater}g, ${t.salt.toLowerCase()} ${result.ingredients.totalSalt}g, ${t.yeast.toLowerCase()} ${result.ingredients.totalYeast}g`,
-      `${t.bake} ${formatTemperature(result.oven.tempF, settings.temperatureUnit)} for ${result.oven.minTime}-${result.oven.maxTime} ${result.oven.unit}`
+      settings.language === "de"
+        ? `${t.bake} ${formatTemperature(result.oven.tempF, settings.temperatureUnit)} fuer ${result.oven.minTime}-${result.oven.maxTime} ${bakeTimeUnit}`
+        : `${t.bake} ${formatTemperature(result.oven.tempF, settings.temperatureUnit)} for ${result.oven.minTime}-${result.oven.maxTime} ${bakeTimeUnit}`
     ];
     if (prefermentMode !== "none") {
       lines.push(
@@ -1735,17 +1904,19 @@ export function App() {
     }
     if (result.sauce) {
       lines.push(
-        `${t.sauce}: ${result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, t)} - ${result.sauce.perPizzaGrams}g / pizza (${result.sauce.totalGrams}g total)`
+        settings.language === "de"
+          ? `${t.sauce}: ${localizedSelectedSauceOption?.name ?? result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, t)} - ${result.sauce.perPizzaGrams}g / Pizza (${result.sauce.totalGrams}g gesamt)`
+          : `${t.sauce}: ${localizedSelectedSauceOption?.name ?? result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, t)} - ${result.sauce.perPizzaGrams}g / pizza (${result.sauce.totalGrams}g total)`
       );
     }
-    await navigator.clipboard.writeText(lines.join("\n"));
+    await copyTextToClipboard(lines.join("\n"));
   };
 
   const copyMethodText = async () => {
-    const lines = [`${recipeName || activeStyle.name}`, ...methodSteps.map((step, index) => `${index + 1}. ${step}`)];
+    const lines = [displayRecipeName, ...methodSteps.map((step, index) => `${index + 1}. ${step}`)];
     try {
-      await navigator.clipboard.writeText(lines.join("\n"));
-      setCopyMethodState("copied");
+      const copied = await copyTextToClipboard(lines.join("\n"));
+      setCopyMethodState(copied ? "copied" : "failed");
     } catch {
       setCopyMethodState("failed");
     }
@@ -1776,7 +1947,7 @@ export function App() {
     const entry: BakeLogEntry = {
       id: crypto.randomUUID(),
       date: new Date().toISOString(),
-      recipeName: recipeName.trim() || activeStyle.name,
+      recipeName: displayRecipeName,
       rating: logDraft.rating,
       outcome: logDraft.outcome,
       notes: logDraft.notes,
@@ -1852,13 +2023,7 @@ export function App() {
               <SelectField
                 label={t.language}
                 value={settings.language}
-                onChange={(value) =>
-                  setSettings((current) => ({
-                    ...DEFAULT_SETTINGS,
-                    ...current,
-                    language: value as LocaleCode
-                  }))
-                }
+                onChange={(value) => updateLanguage(value as LocaleCode)}
               >
                 <option value="en">{t.english}</option>
                 <option value="de">{t.german}</option>
@@ -2318,11 +2483,13 @@ export function App() {
                 </div>
                 {selectedSauceCollection ? (
                   <>
-                    <Notice tone="notice">{selectedSauceCollection.saltWarning ?? SAUCE_SALT_WARNING}</Notice>
+                    <Notice tone="notice">
+                      {localizeSauceSaltWarning(selectedSauceCollection.saltWarning ?? SAUCE_SALT_WARNING, settings.language)}
+                    </Notice>
                     <div className="sauceOptionGrid">
-                      {selectedSauceCollection.options.map((option) => (
+                      {localizedSauceOptions.map((option) => (
                         <button
-                          className={selectedSauceOption?.id === option.id ? "sauceOptionCard active" : "sauceOptionCard"}
+                          className={localizedSelectedSauceOption?.id === option.id ? "sauceOptionCard active" : "sauceOptionCard"}
                           key={option.id}
                           type="button"
                           onClick={() =>
@@ -2338,22 +2505,22 @@ export function App() {
                         </button>
                       ))}
                     </div>
-                    {selectedSauceOption ? (
+                    {localizedSelectedSauceOption ? (
                       <div className="sauceDetailCard">
                         <div className="sauceDetailHeader">
                           <div>
-                            <strong>{selectedSauceOption.name}</strong>
-                            {selectedSauceOption.description ? <span>{selectedSauceOption.description}</span> : null}
+                            <strong>{localizedSelectedSauceOption.name}</strong>
+                            {localizedSelectedSauceOption.description ? <span>{localizedSelectedSauceOption.description}</span> : null}
                           </div>
                           <div className="sauceMeta">
-                            {selectedSauceOption.source ? (
+                            {localizedSelectedSauceOption.source ? (
                               <span>
-                                {sauceUi.source}: {selectedSauceOption.source}
+                                {sauceUi.source}: {localizedSelectedSauceOption.source}
                               </span>
                             ) : null}
-                            {selectedSauceOption.yield ? (
+                            {localizedSelectedSauceOption.yield ? (
                               <span>
-                                {sauceUi.yield}: {selectedSauceOption.yield}
+                                {sauceUi.yield}: {localizedSelectedSauceOption.yield}
                               </span>
                             ) : null}
                           </div>
@@ -2362,8 +2529,8 @@ export function App() {
                           <div className="sauceDetailBlock">
                             <h4>{sauceUi.ingredients}</h4>
                             <ul className="detailList">
-                              {selectedSauceOption.ingredients.map((ingredient) => (
-                                <li key={`${selectedSauceOption.id}-${ingredient.item}`}>
+                              {localizedSelectedSauceOption.ingredients.map((ingredient) => (
+                                <li key={`${localizedSelectedSauceOption.id}-${ingredient.item}`}>
                                   <strong>{ingredient.item}</strong>
                                   <span>
                                     {ingredient.amount}
@@ -2376,15 +2543,15 @@ export function App() {
                           <div className="sauceDetailBlock">
                             <h4>{sauceUi.instructions}</h4>
                             <ol className="detailList ordered">
-                              {selectedSauceOption.instructions.map((instruction) => (
-                                <li key={`${selectedSauceOption.id}-${instruction}`}>{instruction}</li>
+                              {localizedSelectedSauceOption.instructions.map((instruction) => (
+                                <li key={`${localizedSelectedSauceOption.id}-${instruction}`}>{instruction}</li>
                               ))}
                             </ol>
                           </div>
                         </div>
-                        {selectedSauceOption.proTip ? (
+                        {localizedSelectedSauceOption.proTip ? (
                           <Notice tone="ok">
-                            <strong>{sauceUi.proTip}:</strong> {selectedSauceOption.proTip}
+                            <strong>{sauceUi.proTip}:</strong> {localizedSelectedSauceOption.proTip}
                           </Notice>
                         ) : null}
                       </div>
@@ -2563,7 +2730,7 @@ export function App() {
             <div className="recipeHeader">
               <div>
                 <p className="eyebrow">{activeStyle.origin}</p>
-                <h3>{recipeName || activeStyle.name}</h3>
+                <h3>{displayRecipeName}</h3>
                 <p className="sectionMeta">{activeStyle.flourType}</p>
               </div>
               <div className="buttonRow noPrint">
@@ -2679,16 +2846,16 @@ export function App() {
               <div className="splitBox">
                 <strong>{t.sauce}</strong>
                 <span>
-                  {result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, t)}: {result.sauce.perPizzaGrams}g / pizza
+                  {localizedSelectedSauceOption?.name ?? result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, t)}: {result.sauce.perPizzaGrams}g / {settings.language === "de" ? "Pizza" : "pizza"}
                 </span>
                 <span>
                   {settings.language === "de"
                     ? `${result.sauce.totalGrams}g gesamt fuer den Batch`
                     : `${result.sauce.totalGrams}g total for the batch`}
                 </span>
-                {selectedSauceOption?.source ? (
+                {localizedSelectedSauceOption?.source ? (
                   <span>
-                    {sauceUi.source}: {selectedSauceOption.source}
+                    {sauceUi.source}: {localizedSelectedSauceOption.source}
                   </span>
                 ) : null}
               </div>
@@ -2769,25 +2936,25 @@ export function App() {
             <div className="fieldGrid">
               <Field
                 label={t.flourCost}
-                value={costSettings.flourPerKg}
+                value={resolvedCostSettings.flourPerKg}
                 step={0.1}
                 onChange={(value) => setCostSettings((current) => ({ ...current, flourPerKg: numberValue(value) }))}
               />
               <Field
                 label={t.yeastCost}
-                value={costSettings.yeastPerKg}
+                value={resolvedCostSettings.yeastPerKg}
                 step={0.1}
                 onChange={(value) => setCostSettings((current) => ({ ...current, yeastPerKg: numberValue(value) }))}
               />
               <Field
                 label={t.oilCost}
-                value={costSettings.oilPerKg}
+                value={resolvedCostSettings.oilPerKg}
                 step={0.1}
                 onChange={(value) => setCostSettings((current) => ({ ...current, oilPerKg: numberValue(value) }))}
               />
               <SelectField
                 label={t.currency}
-                value={costSettings.currency}
+                value={resolvedCostSettings.currency}
                 onChange={(value) => setCostSettings((current) => ({ ...current, currency: value }))}
               >
                 <option value="USD">USD</option>
@@ -2903,7 +3070,7 @@ export function App() {
           <div className="printTitleRow">
             <div>
               <p className="eyebrow">{activeStyle.origin}</p>
-              <h2>{recipeName || activeStyle.name}</h2>
+              <h2>{displayRecipeName}</h2>
               <p className="printSubtitle">
                 {activeStyle.name} · {activeStyle.flourType} · {normalizedInput.doughBalls} x {normalizedInput.ballWeight}g
               </p>
@@ -3099,22 +3266,26 @@ export function App() {
           </ol>
         </section>
 
-        {selectedSauceOption && result.sauce ? (
+        {localizedSelectedSauceOption && result.sauce ? (
           <section className="printSection">
             <h3>
-              {t.sauce}: {selectedSauceOption.name}
+              {t.sauce}: {localizedSelectedSauceOption.name}
             </h3>
             <p className="printSauceMeta">
-              {result.sauce.perPizzaGrams}g / pizza · {result.sauce.totalGrams}g total
-              {selectedSauceOption.source ? ` · ${sauceUi.source}: ${selectedSauceOption.source}` : ""}
-              {selectedSauceOption.yield ? ` · ${sauceUi.yield}: ${selectedSauceOption.yield}` : ""}
+              {settings.language === "de"
+                ? `${result.sauce.perPizzaGrams}g / Pizza · ${result.sauce.totalGrams}g gesamt`
+                : `${result.sauce.perPizzaGrams}g / pizza · ${result.sauce.totalGrams}g total`}
+              {localizedSelectedSauceOption.source ? ` · ${sauceUi.source}: ${localizedSelectedSauceOption.source}` : ""}
+              {localizedSelectedSauceOption.yield ? ` · ${sauceUi.yield}: ${localizedSelectedSauceOption.yield}` : ""}
             </p>
-            <p className="printSauceWarning">{selectedSauceCollection?.saltWarning ?? SAUCE_SALT_WARNING}</p>
+            <p className="printSauceWarning">
+              {localizeSauceSaltWarning(selectedSauceCollection?.saltWarning ?? SAUCE_SALT_WARNING, settings.language)}
+            </p>
             <div className="printColumns">
               <div>
                 <h4>{sauceUi.ingredients}</h4>
                 <ul className="printBulletList">
-                  {selectedSauceOption.ingredients.map((ingredient) => (
+                  {localizedSelectedSauceOption.ingredients.map((ingredient) => (
                     <li key={`print-sauce-${ingredient.item}`}>
                       <strong>{ingredient.item}</strong>: {ingredient.amount}
                       {ingredient.note ? ` - ${ingredient.note}` : ""}
@@ -3125,16 +3296,16 @@ export function App() {
               <div>
                 <h4>{sauceUi.instructions}</h4>
                 <ol className="printMethodList compact">
-                  {selectedSauceOption.instructions.map((instruction) => (
+                  {localizedSelectedSauceOption.instructions.map((instruction) => (
                     <li key={`print-sauce-step-${instruction}`}>{instruction}</li>
                   ))}
                 </ol>
               </div>
             </div>
-            {selectedSauceOption.proTip ? (
+            {localizedSelectedSauceOption.proTip ? (
               <div className="printCallout">
                 <strong>{sauceUi.proTip}</strong>
-                <span>{selectedSauceOption.proTip}</span>
+                <span>{localizedSelectedSauceOption.proTip}</span>
               </div>
             ) : null}
           </section>
