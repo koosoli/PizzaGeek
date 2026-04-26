@@ -307,7 +307,7 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
       ballWeight: 850,
       flourBlendEnabled: true,
       flourBlend: [
-        { flourId: "bread-flour", percentage: 90 },
+        { flourId: "king-arthur-bread", percentage: 90 },
         { flourId: "whole-wheat", percentage: 10 }
       ],
       fermentation: {
@@ -337,7 +337,7 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
       doughBalls: 1,
       ballWeight: 900,
       flourBlendEnabled: true,
-      flourBlend: [{ flourId: "bread-flour", percentage: 100 }],
+      flourBlend: [{ flourId: "king-arthur-bread", percentage: 100 }],
       pan: {
         ...defaultPanOptions(),
         enabled: true,
@@ -351,6 +351,166 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
         roomTempHours: 2,
         cellarTempHours: 0,
         coldBulkHours: 0,
+        coldBallHours: 0,
+        finalRiseHours: 2,
+        roomTempF: 72,
+        cellarTempF: 55,
+        fridgeTempF: 39,
+        roomHumidityPercent: 60,
+        cellarHumidityPercent: 70,
+        fridgeHumidityPercent: 45
+      }
+    };
+  }
+
+  if (style.id === STYLE_IDS.CIABATTA) {
+    return {
+      ...baseInput,
+      hydrationPercent: 80,
+      saltPercent: 2.2,
+      oilPercent: 2,
+      doughBalls: 4,
+      ballWeight: 280,
+      flourBlendEnabled: true,
+      flourBlend: [
+        { flourId: "king-arthur-bread", percentage: 85 },
+        { flourId: "caputo-manitoba-oro", percentage: 15 }
+      ],
+      fermentation: {
+        roomTempHours: 1,
+        cellarTempHours: 0,
+        coldBulkHours: 12,
+        coldBallHours: 0,
+        finalRiseHours: 2,
+        roomTempF: 72,
+        cellarTempF: 55,
+        fridgeTempF: 39,
+        roomHumidityPercent: 60,
+        cellarHumidityPercent: 70,
+        fridgeHumidityPercent: 45
+      }
+    };
+  }
+
+  if (style.id === STYLE_IDS.SEMOLINA_LOAF) {
+    return {
+      ...baseInput,
+      hydrationPercent: 70,
+      saltPercent: 2.2,
+      doughBalls: 1,
+      ballWeight: 800,
+      flourBlendEnabled: true,
+      flourBlend: [
+        { flourId: "king-arthur-bread", percentage: 70 },
+        { flourId: "semolina-fine", percentage: 30 }
+      ],
+      fermentation: {
+        roomTempHours: 1,
+        cellarTempHours: 0,
+        coldBulkHours: 12,
+        coldBallHours: 0,
+        finalRiseHours: 2,
+        roomTempF: 72,
+        cellarTempF: 55,
+        fridgeTempF: 39,
+        roomHumidityPercent: 60,
+        cellarHumidityPercent: 70,
+        fridgeHumidityPercent: 45
+      }
+    };
+  }
+
+  if (style.id === STYLE_IDS.MILK_BREAD) {
+    return {
+      ...baseInput,
+      hydrationPercent: 66,
+      saltPercent: 2,
+      oilPercent: 6,
+      sugarPercent: 8,
+      milkPowderPercent: 4,
+      doughBalls: 1,
+      ballWeight: 850,
+      flourBlendEnabled: true,
+      flourBlend: [{ flourId: "king-arthur-bread", percentage: 100 }],
+      pan: {
+        ...defaultPanOptions(),
+        enabled: true,
+        shape: "rectangular",
+        length: 9,
+        width: 4,
+        depth: 4,
+        unit: "in"
+      },
+      fermentation: {
+        roomTempHours: 2,
+        cellarTempHours: 0,
+        coldBulkHours: 0,
+        coldBallHours: 0,
+        finalRiseHours: 2,
+        roomTempF: 72,
+        cellarTempF: 55,
+        fridgeTempF: 39,
+        roomHumidityPercent: 60,
+        cellarHumidityPercent: 70,
+        fridgeHumidityPercent: 45
+      }
+    };
+  }
+
+  if (style.id === STYLE_IDS.WHOLE_GRAIN_HEARTH) {
+    return {
+      ...baseInput,
+      hydrationPercent: 73,
+      saltPercent: 2.2,
+      doughBalls: 1,
+      ballWeight: 900,
+      flourBlendEnabled: true,
+      flourBlend: [
+        { flourId: "king-arthur-bread", percentage: 70 },
+        { flourId: "whole-wheat", percentage: 30 }
+      ],
+      fermentation: {
+        roomTempHours: 1,
+        cellarTempHours: 0,
+        coldBulkHours: 14,
+        coldBallHours: 0,
+        finalRiseHours: 2,
+        roomTempF: 72,
+        cellarTempF: 55,
+        fridgeTempF: 39,
+        roomHumidityPercent: 60,
+        cellarHumidityPercent: 70,
+        fridgeHumidityPercent: 45
+      }
+    };
+  }
+
+  if (style.id === STYLE_IDS.SCHIACCIATA) {
+    return {
+      ...baseInput,
+      hydrationPercent: 72,
+      saltPercent: 2.2,
+      oilPercent: 6,
+      doughBalls: 1,
+      ballWeight: 650,
+      flourBlendEnabled: true,
+      flourBlend: [
+        { flourId: "king-arthur-bread", percentage: 80 },
+        { flourId: "caputo-pizzeria", percentage: 20 }
+      ],
+      pan: {
+        ...defaultPanOptions(),
+        enabled: true,
+        shape: "rectangular",
+        length: 13,
+        width: 9,
+        depth: 1.25,
+        unit: "in"
+      },
+      fermentation: {
+        roomTempHours: 1,
+        cellarTempHours: 0,
+        coldBulkHours: 10,
         coldBallHours: 0,
         finalRiseHours: 2,
         roomTempF: 72,

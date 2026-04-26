@@ -364,12 +364,18 @@ const copy = {
     readyDate: "Ready date",
     quickSchedule: "Quick schedule",
     quickScheduleHint: "Pick a bake target and Pizza Geek back-plans the mix for you.",
+    breadQuickScheduleHint: "Pick a loaf window and Pizza Geek back-plans bulk, proof, and bake around the bread profile.",
     startAt: "Start",
     todayTarget: "Same Day",
     overnightTarget: "Overnight",
     twoDayTarget: "2-Day",
     threeDayTarget: "3-Day",
     rapidTarget: "Rapid",
+    breadExpressTarget: "Mix & Bake",
+    breadTodayTarget: "Same-Day Loaf",
+    breadOvernightTarget: "Next Morning",
+    breadTwoDayTarget: "Slow Flavor",
+    breadThreeDayTarget: "Weekend Loaf",
     flour: "Flour",
     water: "Water",
     yeast: "Yeast",
@@ -565,12 +571,18 @@ const copy = {
     readyDate: "Fertig am",
     quickSchedule: "Schnellplanung",
     quickScheduleHint: "Waehle dein Backziel und Pizza Geek plant den Start rueckwaerts fuer dich.",
+    breadQuickScheduleHint: "Waehle dein Brotfenster und Pizza Geek plant Stockgare, Endgare und Backstart passend zum Profil rueckwaerts.",
     startAt: "Start",
     todayTarget: "Gleicher Tag",
     overnightTarget: "Ueber Nacht",
     twoDayTarget: "2 Tage",
     threeDayTarget: "3 Tage",
     rapidTarget: "Schnell",
+    breadExpressTarget: "Mischen & Backen",
+    breadTodayTarget: "Tageslaib",
+    breadOvernightTarget: "Naechster Morgen",
+    breadTwoDayTarget: "Mehr Aroma",
+    breadThreeDayTarget: "Wochenendlaib",
     flour: "Mehl",
     water: "Wasser",
     yeast: "Hefe",
@@ -650,6 +662,7 @@ const ovenOptions: Array<{ value: OvenType; label: string }> = [
 
 const presetKeys = Object.keys(FERMENTATION_PRESETS) as FermentationPresetKey[];
 const plannerShortcutPresets: FermentationPresetKey[] = ["rapid", "sameDay", "overnight", "twoDay", "threeDay"];
+const breadPlannerShortcutPresets: FermentationPresetKey[] = ["express", "sameDay", "overnight", "twoDay", "threeDay"];
 
 const sizePresets: Record<string, Record<number, number>> = {
   default: { 10: 180, 12: 250, 14: 320, 16: 400, 18: 500 },
@@ -889,8 +902,27 @@ function getPresetLabel(key: FermentationPresetKey, locale: LocaleCode): string 
   return labels[key];
 }
 
-function getPlannerShortcutLabel(key: FermentationPresetKey, labels: CopyText): string {
+function getPlannerShortcutLabel(key: FermentationPresetKey, labels: CopyText, breadMode: boolean): string {
+  if (breadMode) {
+    switch (key) {
+      case "express":
+        return labels.breadExpressTarget;
+      case "sameDay":
+        return labels.breadTodayTarget;
+      case "overnight":
+        return labels.breadOvernightTarget;
+      case "twoDay":
+        return labels.breadTwoDayTarget;
+      case "threeDay":
+        return labels.breadThreeDayTarget;
+      default:
+        return labels.quickSchedule;
+    }
+  }
+
   switch (key) {
+    case "express":
+      return labels.quickSchedule;
     case "rapid":
       return labels.rapidTarget;
     case "sameDay":
@@ -904,6 +936,47 @@ function getPlannerShortcutLabel(key: FermentationPresetKey, labels: CopyText): 
     default:
       return labels.quickSchedule;
   }
+}
+
+function getHydrationWorkabilityNotice(
+  input: CalculatorInput,
+  result: DoughResult,
+  locale: LocaleCode
+): { tone: "notice" | "warning" | "danger"; message: string } | null {
+  const nearMax = input.hydrationPercent >= result.style.hydration.max - 0.5;
+  const nearMin = input.hydrationPercent <= result.style.hydration.min + 0.5;
+
+  if (nearMax) {
+    if (result.flourBlend.warningColor === "danger" || result.flourBlend.warningColor === "warning") {
+      return {
+        tone: result.flourBlend.warningColor,
+        message:
+          locale === "de"
+            ? "Diese Hydration liegt am oberen Rand des Profils fur die aktuelle Mehlstarke. Rechne mit weicherem Teig, mehr Faltintervallen oder einer staerkeren Mehlmischung."
+            : "This hydration sits at the top of the profile for the current flour strength. Expect a looser dough, more folds, or a stronger flour blend."
+      };
+    }
+
+    return {
+      tone: "notice",
+      message:
+        locale === "de"
+          ? "Du arbeitest am nassen Ende dieses Profils. Nutze Faltungen, nasse Haende und eine schonende Endformung."
+          : "You are working at the wet end of this profile. Use folds, wet hands, and a gentle final shape."
+    };
+  }
+
+  if (isBreadStyleId(result.style.id) && nearMin) {
+    return {
+      tone: "notice",
+      message:
+        locale === "de"
+          ? "Diese Einstellung liegt auf der trockeneren Seite des Brotprofils. Rechne mit strafferer Formgebung und engerer Krume."
+          : "This setting sits on the drier side of the bread profile. Expect easier shaping and a tighter crumb."
+    };
+  }
+
+  return null;
 }
 
 function getSizePresetForStyle(styleName: string) {
@@ -2043,6 +2116,7 @@ export function App() {
     [localizedPlan, settings.language]
   );
   const plannerShortcutReference = useMemo(() => roundDateUp(new Date()), [planMode, readyBy]);
+  const plannerShortcutKeys = isBreadMode ? breadPlannerShortcutPresets : plannerShortcutPresets;
   const methodSteps = useMemo(
     () => getMethodSteps(normalizedInput, result, settings.language, settings.temperatureUnit),
     [normalizedInput, result, settings.language, settings.temperatureUnit]
@@ -2056,6 +2130,23 @@ export function App() {
     [result, settings.language, settings.temperatureUnit]
   );
   const sizePreset = useMemo(() => getSizePresetForStyle(activeStyle.name), [activeStyle.name]);
+  const doughSetupNotices = useMemo(() => {
+    const notices: Array<{ tone: "ok" | "notice" | "warning" | "danger"; message: string }> = [];
+    const hydrationNotice = getHydrationWorkabilityNotice(normalizedInput, result, settings.language);
+
+    if (hydrationNotice) {
+      notices.push(hydrationNotice);
+    }
+
+    if (normalizedInput.flourBlendEnabled && result.flourBlend.warning) {
+      notices.push({
+        tone: result.flourBlend.warningColor,
+        message: result.flourBlend.warning
+      });
+    }
+
+    return notices;
+  }, [normalizedInput, result, settings.language]);
   const sizePresetEntries = useMemo(
     () =>
       Object.entries(sizePreset).map(([size, weight]) => ({
@@ -2409,12 +2500,12 @@ export function App() {
   const plannerShortcuts = useMemo<PlannerShortcut[]>(() => {
     const readyByTimestamp = new Date(readyBy).getTime();
 
-    return plannerShortcutPresets.map((key) => {
+    return plannerShortcutKeys.map((key) => {
       const durationHours = getPresetDurationHours(key);
       const targetDate = addHours(plannerShortcutReference, durationHours);
       return {
         id: key,
-        label: getPlannerShortcutLabel(key, t),
+        label: getPlannerShortcutLabel(key, t, isBreadMode),
         note: `${durationHours}h · ${formatPlannerTarget(targetDate, settings.language)}`,
         active:
           planMode === "ready-by" && preset === key && Math.abs(targetDate.getTime() - readyByTimestamp) < 60_000,
@@ -2426,10 +2517,12 @@ export function App() {
     normalizedInput.fermentation.fridgeTempF,
     normalizedInput.fermentation.roomTempF,
     planMode,
+    plannerShortcutKeys,
     preset,
     plannerShortcutReference,
     readyBy,
     settings.language,
+    isBreadMode,
     t
   ]);
 
@@ -2960,6 +3053,15 @@ export function App() {
                     </>
                   ) : null}
                 </div>
+                {doughSetupNotices.length ? (
+                  <div className="noticeStack">
+                    {doughSetupNotices.map((notice) => (
+                      <Notice key={`${notice.tone}-${notice.message}`} tone={notice.tone}>
+                        {notice.message}
+                      </Notice>
+                    ))}
+                  </div>
+                ) : null}
               </>
             ) : null}
           </section>
@@ -3458,7 +3560,7 @@ export function App() {
                 readyDateLabel={t.readyDate}
                 readyNowLabel={t.today}
                 quickScheduleLabel={t.quickSchedule}
-                quickScheduleHint={t.quickScheduleHint}
+                quickScheduleHint={isBreadMode ? t.breadQuickScheduleHint : t.quickScheduleHint}
                 startLabel={t.startAt}
                 startValue={planStartValue}
                 bakeValue={planBakeValue}

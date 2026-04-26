@@ -408,7 +408,7 @@ h3 {
 }
 
 .breadProfileCard {
-  min-height: 180px;
+  min-height: 220px;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -436,6 +436,14 @@ h3 {
   background: rgba(196, 90, 43, 0.08);
 }
 
+.breadProfileKicker {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .breadProfileCard strong {
   font-size: 16px;
 }
@@ -449,6 +457,29 @@ h3 {
 
 .breadProfileCard span {
   font-size: 12px;
+}
+
+.breadProfileTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.breadProfileTag {
+  padding: 6px 9px;
+  border: 1px solid rgba(196, 90, 43, 0.22);
+  border-radius: 999px;
+  background: rgba(196, 90, 43, 0.08);
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.noticeStack {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .styleGroupCard {

@@ -46,9 +46,9 @@ That split is intentional: a future `apps/mobile` client can reuse the same calc
 
 ## Release Notes
 
-Current release: `v0.2.0`
+Current release: `v0.3.0`
 
-See [CHANGELOG.md](./CHANGELOG.md) for the first public open-source release notes.
+See [CHANGELOG.md](./CHANGELOG.md) for the latest release notes.
 
 ## Support The Project
 

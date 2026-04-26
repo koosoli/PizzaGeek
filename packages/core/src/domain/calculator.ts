@@ -238,6 +238,28 @@ export function getOvenBakeProfile(style: PizzaStyle, oven: OvenOptions, pan?: P
     };
   }
 
+  if (style.id === STYLE_IDS.SEMOLINA_LOAF) {
+    return {
+      tempF: 465,
+      tempC: fahrenheitToCelsius(465),
+      minTime: 32,
+      maxTime: 42,
+      unit: "minutes",
+      detail: "Steam early, score confidently, and finish until the crust turns deep gold."
+    };
+  }
+
+  if (style.id === STYLE_IDS.WHOLE_GRAIN_HEARTH) {
+    return {
+      tempF: 470,
+      tempC: fahrenheitToCelsius(470),
+      minTime: 36,
+      maxTime: 48,
+      unit: "minutes",
+      detail: "Steam first 20 min and bake through full color before slicing."
+    };
+  }
+
   if (style.id === STYLE_IDS.SANDWICH_LOAF) {
     return {
       tempF: 400,
@@ -246,6 +268,17 @@ export function getOvenBakeProfile(style: PizzaStyle, oven: OvenOptions, pan?: P
       maxTime: 40,
       unit: "minutes",
       detail: "Bake in a tin and rotate once the top has set."
+    };
+  }
+
+  if (style.id === STYLE_IDS.MILK_BREAD) {
+    return {
+      tempF: 375,
+      tempC: fahrenheitToCelsius(375),
+      minTime: 28,
+      maxTime: 38,
+      unit: "minutes",
+      detail: "Bake in a tin and tent once browned if the top colors early."
     };
   }
 
@@ -272,13 +305,13 @@ export function getOvenBakeProfile(style: PizzaStyle, oven: OvenOptions, pan?: P
         unit: "minutes"
       };
     }
-    if (style.id === STYLE_IDS.SICILIAN || style.id === STYLE_IDS.FOCACCIA) {
+    if (style.id === STYLE_IDS.SICILIAN || style.id === STYLE_IDS.FOCACCIA || style.id === STYLE_IDS.SCHIACCIATA) {
       const big = panArea > 180;
       return {
-        tempF: style.id === STYLE_IDS.FOCACCIA ? 450 : big ? 450 : 475,
-        tempC: fahrenheitToCelsius(style.id === STYLE_IDS.FOCACCIA ? 450 : big ? 450 : 475),
-        minTime: style.id === STYLE_IDS.FOCACCIA ? 18 : big ? 25 : 20,
-        maxTime: style.id === STYLE_IDS.FOCACCIA ? 28 : big ? 32 : 28,
+        tempF: style.id === STYLE_IDS.FOCACCIA ? 450 : style.id === STYLE_IDS.SCHIACCIATA ? 460 : big ? 450 : 475,
+        tempC: fahrenheitToCelsius(style.id === STYLE_IDS.FOCACCIA ? 450 : style.id === STYLE_IDS.SCHIACCIATA ? 460 : big ? 450 : 475),
+        minTime: style.id === STYLE_IDS.FOCACCIA ? 18 : style.id === STYLE_IDS.SCHIACCIATA ? 16 : big ? 25 : 20,
+        maxTime: style.id === STYLE_IDS.FOCACCIA ? 28 : style.id === STYLE_IDS.SCHIACCIATA ? 24 : big ? 32 : 28,
         unit: "minutes"
       };
     }

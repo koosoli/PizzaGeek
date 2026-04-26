@@ -22,9 +22,17 @@ export function BreadProfilePicker({ hint, profiles, value, onChange }: BreadPro
               type="button"
               onClick={() => onChange(profile.styleId)}
             >
+              <small className="breadProfileKicker">{profile.kicker}</small>
               <strong>{profile.title}</strong>
               <p>{profile.description}</p>
               <span>{profile.note}</span>
+              <div className="breadProfileTags" aria-hidden="true">
+                {profile.tags.map((tag) => (
+                  <span className="breadProfileTag" key={`${profile.id}-${tag}`}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
             </button>
           );
         })}

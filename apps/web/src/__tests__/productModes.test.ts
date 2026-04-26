@@ -13,6 +13,8 @@ describe("productModes", () => {
     expect(isBreadStyleId(STYLE_IDS.FOCACCIA)).toBe(true);
     expect(isBreadStyleId(STYLE_IDS.COUNTRY_LOAF)).toBe(true);
     expect(isBreadStyleId(STYLE_IDS.SANDWICH_LOAF)).toBe(true);
+    expect(isBreadStyleId(STYLE_IDS.CIABATTA)).toBe(true);
+    expect(isBreadStyleId(STYLE_IDS.MILK_BREAD)).toBe(true);
     expect(isBreadStyleId(STYLE_IDS.COCA)).toBe(true);
     expect(isBreadStyleId(STYLE_IDS.NEAPOLITAN)).toBe(false);
     expect(getProductModeForStyleId(STYLE_IDS.FLAMMKUCHEN)).toBe("bread");
@@ -29,10 +31,13 @@ describe("productModes", () => {
     const englishProfiles = getBreadProfiles("en");
     const germanProfiles = getBreadProfiles("de");
 
-    expect(englishProfiles).toHaveLength(5);
-    expect(germanProfiles).toHaveLength(5);
+    expect(englishProfiles).toHaveLength(10);
+    expect(germanProfiles).toHaveLength(10);
     expect(englishProfiles[0]?.styleId).toBe(STYLE_IDS.FOCACCIA);
+    expect(englishProfiles.some((profile) => profile.styleId === STYLE_IDS.CIABATTA)).toBe(true);
+    expect(englishProfiles.some((profile) => profile.styleId === STYLE_IDS.SCHIACCIATA)).toBe(true);
     expect(englishProfiles.some((profile) => profile.styleId === STYLE_IDS.COUNTRY_LOAF)).toBe(true);
+    expect(englishProfiles[3]?.tags[0]).toContain("hydration");
     expect(germanProfiles[2]?.description).toContain("Kastenlaib");
   });
 });

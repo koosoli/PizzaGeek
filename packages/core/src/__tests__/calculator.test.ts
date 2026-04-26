@@ -70,12 +70,42 @@ describe("calculateDough", () => {
     expect(input.fermentation.coldBulkHours).toBe(14);
     expect(input.fermentation.coldBallHours).toBe(0);
     expect(input.flourBlend).toEqual([
-      { flourId: "bread-flour", percentage: 90 },
+      { flourId: "king-arthur-bread", percentage: 90 },
       { flourId: "whole-wheat", percentage: 10 }
     ]);
     expect(input.sauce.enabled).toBe(false);
     expect(result.sauce).toBeUndefined();
     expect(result.oven.detail).toContain("Steam first 20 min");
+    expect(result.oven.unit).toBe("minutes");
+  });
+
+  it("builds ciabatta defaults with a high-hydration fold-friendly blend", () => {
+    const input = createDefaultInput(STYLE_IDS.CIABATTA);
+    const result = calculateDough(input);
+
+    expect(input.hydrationPercent).toBe(80);
+    expect(input.doughBalls).toBe(4);
+    expect(input.ballWeight).toBe(280);
+    expect(input.flourBlend).toEqual([
+      { flourId: "king-arthur-bread", percentage: 85 },
+      { flourId: "caputo-manitoba-oro", percentage: 15 }
+    ]);
+    expect(input.fermentation.coldBulkHours).toBe(12);
+    expect(result.style.name).toBe("Ciabatta");
+    expect(result.sauce).toBeUndefined();
+  });
+
+  it("builds milk bread defaults with tin geometry and enriched dough percentages", () => {
+    const input = createDefaultInput(STYLE_IDS.MILK_BREAD);
+    const result = calculateDough(input);
+
+    expect(input.pan.enabled).toBe(true);
+    expect(input.pan.length).toBe(9);
+    expect(input.pan.width).toBe(4);
+    expect(input.oilPercent).toBe(6);
+    expect(input.sugarPercent).toBe(8);
+    expect(input.milkPowderPercent).toBe(4);
+    expect(result.oven.detail).toContain("tent once browned");
     expect(result.oven.unit).toBe("minutes");
   });
 
