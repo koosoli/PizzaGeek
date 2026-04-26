@@ -42,7 +42,7 @@ export function normalizeSavedRecipe(value: unknown): SavedRecipe | null {
     id: value.id,
     name: value.name,
     createdAt: typeof value.createdAt === "string" ? value.createdAt : new Date(0).toISOString(),
-    input: value.input as CalculatorInput
+    input: value.input as unknown as CalculatorInput
   };
 }
 
