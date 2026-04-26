@@ -8,6 +8,8 @@ export const STYLE_IDS = {
   PIZZA_ALLA_PALA: "pizza-alla-pala",
   SICILIAN: "sicilian",
   FOCACCIA: "focaccia",
+  COUNTRY_LOAF: "country-loaf",
+  SANDWICH_LOAF: "sandwich-loaf",
   NEW_YORK: "new-york",
   NEW_HAVEN: "new-haven",
   DETROIT: "detroit",
@@ -197,6 +199,43 @@ export const PIZZA_STYLES: PizzaStyle[] = [
     [18, 28, "minutes"],
     "conventional",
     700,
+    1,
+    true
+  ),
+  style(
+    STYLE_IDS.COUNTRY_LOAF,
+    "Country Loaf",
+    "European hearth bread",
+    "Bread Flour with Whole Wheat",
+    "Freeform artisan loaf with strong steam, open crumb, and a crackling crust.",
+    [68, 74, 80],
+    [1.8, 2.2, 2.5],
+    [0, 0, 1],
+    [0, 0, 0],
+    [8, 18, 30],
+    true,
+    [450, 475, 500],
+    [35, 48, "minutes"],
+    "conventional",
+    850,
+    1
+  ),
+  style(
+    STYLE_IDS.SANDWICH_LOAF,
+    "Sandwich Loaf",
+    "Tin-baked everyday bread",
+    "Bread Flour",
+    "Soft enriched pan loaf for slices and toast, with a thin tender crust.",
+    [62, 68, 72],
+    [1.8, 2, 2.3],
+    [3, 5, 8],
+    [2, 4, 8],
+    [4, 12, 24],
+    false,
+    [375, 400, 425],
+    [30, 40, "minutes"],
+    "conventional",
+    900,
     1,
     true
   ),
@@ -404,6 +443,15 @@ export const PIZZA_STYLES: PizzaStyle[] = [
 ];
 
 export const HIDE_OIL_SUGAR_STYLES = new Set(["Neapolitan", "New Haven"]);
+export const BREAD_STYLE_IDS: ReadonlySet<string> = new Set([
+  STYLE_IDS.FOCACCIA,
+  STYLE_IDS.COUNTRY_LOAF,
+  STYLE_IDS.SANDWICH_LOAF,
+  STYLE_IDS.FLAMMKUCHEN,
+  STYLE_IDS.COCA
+]);
+export const LOAF_STYLE_IDS: ReadonlySet<string> = new Set([STYLE_IDS.COUNTRY_LOAF, STYLE_IDS.SANDWICH_LOAF]);
+export const TIN_LOAF_STYLE_IDS: ReadonlySet<string> = new Set([STYLE_IDS.SANDWICH_LOAF]);
 
 export function getStyleById(id: string): PizzaStyle | undefined {
   return PIZZA_STYLES.find((style) => style.id === id);
@@ -415,4 +463,16 @@ export function getStyleByName(name: string): PizzaStyle | undefined {
 
 export function getDefaultOvenForStyle(styleId: string): OvenType {
   return getStyleById(styleId)?.defaultOven ?? "steel-stone";
+}
+
+export function isBreadStyleId(styleId: string): boolean {
+  return BREAD_STYLE_IDS.has(styleId);
+}
+
+export function isLoafStyleId(styleId: string): boolean {
+  return LOAF_STYLE_IDS.has(styleId);
+}
+
+export function isTinLoafStyleId(styleId: string): boolean {
+  return TIN_LOAF_STYLE_IDS.has(styleId);
 }

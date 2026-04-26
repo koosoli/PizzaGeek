@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 
-type PersistentStateOptions = {
+type PersistentStateOptions<T> = {
   legacyKeys?: string[];
+  deserialize?: (value: unknown) => T;
 };
 
-export function usePersistentState<T>(key: string, initialValue: T, options?: PersistentStateOptions) {
+export function usePersistentState<T>(key: string, initialValue: T, options?: PersistentStateOptions<T>) {
   const [value, setValue] = useState<T>(() => {
     if (typeof window === "undefined") return initialValue;
 
@@ -13,9 +14,10 @@ export function usePersistentState<T>(key: string, initialValue: T, options?: Pe
       const stored = window.localStorage.getItem(candidateKey);
       if (!stored) continue;
       try {
-        return JSON.parse(stored) as T;
+        const parsed = JSON.parse(stored) as unknown;
+        return options?.deserialize ? options.deserialize(parsed) : (parsed as T);
       } catch {
-        return initialValue;
+        continue;
       }
     }
 

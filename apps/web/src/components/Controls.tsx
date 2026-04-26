@@ -1,4 +1,11 @@
-import type { ChangeEvent, ReactNode } from "react";
+import { type ChangeEvent, type ReactNode, useId } from "react";
+
+export interface FieldSliderProps {
+  min: number;
+  max: number;
+  step?: number;
+  mobileOnly?: boolean;
+}
 
 interface FieldProps {
   label: string;
@@ -9,25 +16,61 @@ interface FieldProps {
   max?: number;
   step?: number;
   hint?: string;
+  slider?: FieldSliderProps;
 }
 
-export function Field({ label, value, onChange, suffix, min, max, step = 1, hint }: FieldProps) {
+function formatSliderMark(value: number, suffix?: string) {
+  return `${Number.isInteger(value) ? value : value.toFixed(1)}${suffix ?? ""}`;
+}
+
+export function Field({ label, value, onChange, suffix, min, max, step = 1, hint, slider }: FieldProps) {
+  const inputId = useId();
+  const hintId = hint ? `${inputId}-hint` : undefined;
+  const sliderValue =
+    typeof value === "number" ? value : value === "" ? slider?.min : Number.parseFloat(value);
+
   return (
-    <label className="field">
-      <span>{label}</span>
+    <div className={`field ${slider ? "fieldWithSlider" : ""}`}>
+      <label className="fieldLabel" htmlFor={inputId}>
+        {label}
+      </label>
+      {slider && Number.isFinite(sliderValue) ? (
+        <div className={`fieldSliderWrap ${slider.mobileOnly ? "mobileOnly" : ""}`}>
+          <input
+            className="fieldSlider"
+            type="range"
+            min={slider.min}
+            max={slider.max}
+            step={slider.step ?? step}
+            value={sliderValue}
+            aria-label={label}
+            onChange={(event) => onChange(event.target.value)}
+          />
+          <div className="fieldSliderScale" aria-hidden="true">
+            <span>{formatSliderMark(slider.min, suffix)}</span>
+            <span>{formatSliderMark(slider.max, suffix)}</span>
+          </div>
+        </div>
+      ) : null}
       <div className="inputWrap">
         <input
+          id={inputId}
           type="number"
           value={value}
           min={min}
           max={max}
           step={step}
+          aria-describedby={hintId}
           onChange={(event) => onChange(event.target.value)}
         />
         {suffix ? <em>{suffix}</em> : null}
       </div>
-      {hint ? <small className="fieldHint">{hint}</small> : null}
-    </label>
+      {hint ? (
+        <small className="fieldHint" id={hintId}>
+          {hint}
+        </small>
+      ) : null}
+    </div>
   );
 }
 

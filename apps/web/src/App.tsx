@@ -17,7 +17,7 @@
   RotateCcw,
   Save,
   Settings2,
-  Share2,
+  Upload,
   Wheat
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
@@ -47,41 +47,43 @@ import {
   type OvenType,
   type PizzaStyle,
   type SauceRecipeOption,
+  type ScheduleMode,
   type SizeUnit,
   type TemperatureUnit,
   type YeastType
 } from "@pizza-geek/core";
+import { type AppSettings, DEFAULT_SETTINGS, getLocaleDefaults, resolveAppSettings, type LocaleCode, type ThemeMode, type WorkspaceMode } from "./appConfig";
+import { BreadProfilePicker } from "./components/BreadProfilePicker";
 import { Field, Segmented, SelectField, Toggle } from "./components/Controls";
+import { FermentationPanelContent, getFermentationStageContent } from "./components/FermentationPanelContent";
+import { PlannerPanelContent, type PlannerShortcut, type PlannerTimelineItem } from "./components/PlannerPanelContent";
+import { RecipeSheetPanelContent } from "./components/RecipeSheetPanelContent";
+import { SettingsPanelContent } from "./components/SettingsPanelContent";
+import { StylePicker, type StylePickerGroup } from "./components/StylePicker";
+import { Metric, Notice, PanelTitle } from "./components/Surface";
+import {
+  createPortableDataBundle,
+  createPortableDataFileName,
+  mergeBakeLog,
+  mergeSavedRecipes,
+  normalizeBakeLog,
+  normalizeSavedRecipes,
+  parsePortableDataBundle,
+  serializePortableDataBundle,
+  type BakeLogEntry,
+  type SavedRecipe
+} from "./dataExchange";
 import { usePersistentState } from "./hooks/usePersistentState";
-
-type LocaleCode = "en" | "de";
-type ThemeMode = "dark" | "light";
+import {
+  getBreadProfiles,
+  getFallbackStyleIdForProductMode,
+  getProductModeForStyleId,
+  isBreadStyleId,
+  isLoafStyleId,
+  isTinLoafStyleId,
+  type ProductMode
+} from "./productModes";
 type PrefermentMode = "none" | "poolish" | "biga" | "tiga" | "bassinage";
-
-type AppSettings = {
-  language: LocaleCode;
-  temperatureUnit: TemperatureUnit;
-  sizeUnit: SizeUnit;
-  theme: ThemeMode;
-};
-
-type SavedRecipe = {
-  id: string;
-  name: string;
-  createdAt: string;
-  input: CalculatorInput;
-};
-
-type BakeLogEntry = {
-  id: string;
-  date: string;
-  recipeName: string;
-  rating: number;
-  outcome: "keeper" | "tweak" | "fail";
-  notes: string;
-  photoDataUrl?: string;
-  photoName?: string;
-};
 
 type QualitySignal = {
   label: string;
@@ -98,6 +100,11 @@ type BlendBreakdownRow = {
   totalGrams: number;
   prefermentGrams: number;
   mainDoughGrams: number;
+};
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
 
 type PanelKey =
@@ -130,13 +137,6 @@ const STORAGE_KEYS = {
   bakeLog: "pizza-geek.bake-log"
 } as const;
 
-const DEFAULT_SETTINGS: AppSettings = {
-  language: "en",
-  temperatureUnit: "F",
-  sizeUnit: "in",
-  theme: "dark"
-};
-
 const DEFAULT_PANEL_STATE: Record<PanelKey, boolean> = {
   settings: true,
   styles: true,
@@ -156,15 +156,6 @@ const DEFAULT_PANEL_STATE: Record<PanelKey, boolean> = {
   journal: false
 };
 
-const LOCALE_DEFAULTS = {
-  en: { temperatureUnit: "F", sizeUnit: "in", currency: "USD" },
-  de: { temperatureUnit: "C", sizeUnit: "cm", currency: "EUR" }
-} as const;
-
-function getLocaleDefaults(locale: LocaleCode) {
-  return LOCALE_DEFAULTS[locale];
-}
-
 function getDefaultRecipeName(styleId: string, locale: LocaleCode) {
   const styleName = getStyleById(styleId)?.name ?? "Pizza";
   return `${styleName} ${locale === "de" ? "Teig" : "dough"}`;
@@ -180,10 +171,11 @@ function getRecipeDisplayName(recipeName: string, styleId: string, locale: Local
   return recipeName.trim() || getDefaultRecipeName(styleId, locale);
 }
 
-type StyleGroup = {
-  parent: PizzaStyle;
-  variants: PizzaStyle[];
-};
+function getPortableDataImportMessage(locale: LocaleCode, recipeCount: number, journalCount: number) {
+  return locale === "de"
+    ? `Backup importiert: ${recipeCount} Rezepte, ${journalCount} Backnotizen.`
+    : `Imported backup: ${recipeCount} recipes, ${journalCount} journal entries.`;
+}
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
   try {
@@ -240,16 +232,25 @@ const copy = {
     title: "Dough Calculator",
     subtitle:
       "Style-aware dough math for serious home and pro pizza making, with clearer planning, better bake guidance, and a much stronger recipe workflow.",
+    subtitleBread:
+      "Bread-first dough planning for focaccia, flatbread, and loaf workflows, with proofing and bake guidance that tracks the product.",
     resetStyle: "Reset style",
+    resetProfile: "Reset profile",
     printRecipe: "Print sheet",
     buySlice: "Buy a slice",
     settings: "Settings",
     theme: "Theme",
     language: "Language",
+    productMode: "Product",
+    workspaceMode: "Workspace",
     temperatureUnit: "Temperature",
     sizeUnit: "Length unit",
     english: "English",
     german: "Deutsch",
+    pizzaProduct: "Pizza",
+    breadProduct: "Bread",
+    guidedMode: "Guided",
+    studioMode: "Studio",
     variants: "Variants",
     dark: "Dark",
     light: "Light",
@@ -271,6 +272,10 @@ const copy = {
     bakeJournal: "Bake Journal",
     doughBalls: "Dough balls",
     ballWeight: "Ball weight",
+    pieces: "Pieces",
+    pieceWeight: "Piece weight",
+    loaves: "Loaves",
+    loafWeight: "Loaf weight",
     hydration: "Hydration",
     salt: "Salt",
     oil: "Oil",
@@ -291,6 +296,9 @@ const copy = {
     roomTemp: "Room temp",
     cellarTemp: "Cellar temp",
     fridgeTemp: "Fridge temp",
+    roomHumidity: "Room humidity",
+    cellarHumidity: "Cellar humidity",
+    fridgeHumidity: "Fridge humidity",
     prefermentMode: "Preferment style",
     none: "None",
     poolish: "Poolish",
@@ -305,9 +313,28 @@ const copy = {
     addFlour: "Add flour",
     blendTotal: "Blend total",
     totalLabel: "total",
+    styleLibrary: "Full style library",
+    breadProfiles: "Bread profiles",
+    breadModeHint: "Bread mode covers pan breads, flatbreads, and loaf profiles with bread-specific proofing and bake guidance.",
+    productModeHint: "Pizza keeps the full pizza style library. Bread narrows the app to bread-first profiles instead of pizza assumptions.",
+    workspaceHint: "Guided keeps the essentials up front. Switch to Studio for flour blending, costing, saves, and bake logging.",
+    guidedStylesHint: "Start with a core style, then use the full library for regional or specialty doughs.",
+    appInstall: "App install",
+    appInstallHint: "Install Pizza Geek for faster launch and offline recipe access.",
+    installApp: "Install app",
+    installReady: "Ready to install on this device.",
+    installedApp: "Installed and launchable like an app.",
+    installUnavailable: "Installation is not available in this browser yet.",
+    offlineReady: "Offline cache is ready after your first visit.",
+    offlinePending: "Offline support is preparing.",
+    offlineNow: "You are offline. Cached app screens should still work.",
+    recipeData: "Recipe data",
+    recipeDataHint: "Move saved recipes and bake journal entries between devices with a versioned JSON backup.",
     panGeometry: "Pan geometry",
     quickWeights: "Quick size weights",
     sizeHint: "Tap a diameter to apply a typical dough-ball weight for this style.",
+    freeformLoafHint: "Freeform loaves skip pizza size presets. Shape tight, proof in a banneton or lined bowl, then score and steam the bake.",
+    tinLoafHint: "Tin loaves use the pan dimensions above to estimate dough weight and keep the bake profile honest.",
     shape: "Shape",
     unit: "Unit",
     rectangular: "Rectangular",
@@ -335,6 +362,14 @@ const copy = {
     today: "Starting now",
     readyBy: "Ready by",
     readyDate: "Ready date",
+    quickSchedule: "Quick schedule",
+    quickScheduleHint: "Pick a bake target and Pizza Geek back-plans the mix for you.",
+    startAt: "Start",
+    todayTarget: "Same Day",
+    overnightTarget: "Overnight",
+    twoDayTarget: "2-Day",
+    threeDayTarget: "3-Day",
+    rapidTarget: "Rapid",
     flour: "Flour",
     water: "Water",
     yeast: "Yeast",
@@ -353,11 +388,18 @@ const copy = {
     additionalYeast: "additional yeast",
     batch: "Batch",
     perDough: "Per dough",
+    perPiece: "Per piece",
+    perLoaf: "Per loaf",
     recipeName: "Recipe name",
     save: "Save",
     print: "Print",
     export: "Export",
+    exportData: "Export data",
+    importData: "Import data",
     copy: "Copy",
+    dataExported: "Recipe backup downloaded.",
+    dataExportError: "Couldn't download the backup.",
+    dataImportError: "Couldn't import that file. Use a Pizza Geek backup JSON.",
     addPhoto: "Add photo",
     removePhoto: "Remove photo",
     rating: "Rating",
@@ -391,16 +433,25 @@ const copy = {
     title: "Teigrechner",
     subtitle:
       "Stilbewusste Teigberechnung fur ambitionierte Home- und Profi-Pizza, mit klarerer Planung, besserer Backfuhrung und einem deutlich starkeren Rezept-Workflow.",
+    subtitleBread:
+      "Brotorientierte Teigplanung fur Focaccia-, Fladenbrot- und Laib-Workflows, mit Gare- und Backhinweisen passend zum Produkt.",
     resetStyle: "Stil zurucksetzen",
+    resetProfile: "Profil zurucksetzen",
     printRecipe: "Rezept drucken",
     buySlice: "Pizza spendieren",
     settings: "Einstellungen",
     theme: "Thema",
     language: "Sprache",
+    productMode: "Produkt",
+    workspaceMode: "Arbeitsmodus",
     temperatureUnit: "Temperatur",
     sizeUnit: "Laengeneinheit",
     english: "Englisch",
     german: "Deutsch",
+    pizzaProduct: "Pizza",
+    breadProduct: "Brot",
+    guidedMode: "Gefuehrt",
+    studioMode: "Studio",
     variants: "Varianten",
     dark: "Dunkel",
     light: "Hell",
@@ -422,6 +473,10 @@ const copy = {
     bakeJournal: "Backjournal",
     doughBalls: "Teiglinge",
     ballWeight: "Teiglingsgewicht",
+    pieces: "Stuecke",
+    pieceWeight: "Stueckgewicht",
+    loaves: "Laibe",
+    loafWeight: "Laibgewicht",
     hydration: "Hydration",
     salt: "Salz",
     oil: "Oel",
@@ -442,6 +497,9 @@ const copy = {
     roomTemp: "Raumtemp.",
     cellarTemp: "Kellertemp.",
     fridgeTemp: "Kuehlschranktemp.",
+    roomHumidity: "Raumfeuchte",
+    cellarHumidity: "Kellerfeuchte",
+    fridgeHumidity: "Kuehlschrankfeuchte",
     prefermentMode: "Vorteig-Stil",
     none: "Keiner",
     poolish: "Poolish",
@@ -456,9 +514,28 @@ const copy = {
     addFlour: "Mehl hinzufugen",
     blendTotal: "Mischung gesamt",
     totalLabel: "gesamt",
+    styleLibrary: "Komplette Stilbibliothek",
+    breadProfiles: "Brotprofile",
+    breadModeHint: "Der Brotmodus deckt Blechbrote, Fladenbrote und Laibprofile mit brotspezifischer Gare- und Backfuehrung ab.",
+    productModeHint: "Pizza behaelt die volle Pizzastil-Bibliothek. Brot richtet die App auf Brotprofile statt auf Pizza-Annahmen aus.",
+    workspaceHint: "Gefuehrt zeigt zuerst das Wesentliche. Studio oeffnet Mehlmischung, Kosten, Speicher und Backjournal.",
+    guidedStylesHint: "Starte mit einem Kernstil und wechsle fuer regionale oder spezielle Teige in die volle Bibliothek.",
+    appInstall: "App-Installation",
+    appInstallHint: "Installiere Pizza Geek fuer schnelleren Start und Offline-Zugriff auf Rezepte.",
+    installApp: "App installieren",
+    installReady: "Auf diesem Geraet installierbar.",
+    installedApp: "Installiert und wie eine App startbar.",
+    installUnavailable: "Installation ist in diesem Browser derzeit nicht verfuegbar.",
+    offlineReady: "Offline-Cache ist nach dem ersten Besuch bereit.",
+    offlinePending: "Offline-Unterstuetzung wird vorbereitet.",
+    offlineNow: "Du bist offline. Zwischengespeicherte App-Seiten sollten weiter funktionieren.",
+    recipeData: "Rezeptdaten",
+    recipeDataHint: "Verschiebe gespeicherte Rezepte und Backjournal-Eintraege zwischen Geraeten mit einem versionierten JSON-Backup.",
     panGeometry: "Blechgeometrie",
     quickWeights: "Schnellgewichte",
     sizeHint: "Ein Durchmesser setzt ein typisches Teiggewicht fur diesen Stil.",
+    freeformLoafHint: "Freigeschobene Laibe nutzen keine Pizza-Groessen. Straff formen, im Garkorb oder in einer ausgelegten Schuessel gehen lassen, dann einschneiden und mit Dampf backen.",
+    tinLoafHint: "Kastenbrote nutzen die Formmasse oben fuer Gewichtschaetzung und ein ehrliches Backprofil.",
     shape: "Form",
     unit: "Einheit",
     rectangular: "Rechteckig",
@@ -486,6 +563,14 @@ const copy = {
     today: "Jetzt starten",
     readyBy: "Fertig bis",
     readyDate: "Fertig am",
+    quickSchedule: "Schnellplanung",
+    quickScheduleHint: "Waehle dein Backziel und Pizza Geek plant den Start rueckwaerts fuer dich.",
+    startAt: "Start",
+    todayTarget: "Gleicher Tag",
+    overnightTarget: "Ueber Nacht",
+    twoDayTarget: "2 Tage",
+    threeDayTarget: "3 Tage",
+    rapidTarget: "Schnell",
     flour: "Mehl",
     water: "Wasser",
     yeast: "Hefe",
@@ -504,11 +589,18 @@ const copy = {
     additionalYeast: "zusaetzliche Hefe",
     batch: "Charge",
     perDough: "Pro Teigling",
+    perPiece: "Pro Stueck",
+    perLoaf: "Pro Laib",
     recipeName: "Rezeptname",
     save: "Speichern",
     print: "Drucken",
     export: "Export",
+    exportData: "Daten exportieren",
+    importData: "Daten importieren",
     copy: "Kopieren",
+    dataExported: "Rezept-Backup heruntergeladen.",
+    dataExportError: "Das Backup konnte nicht heruntergeladen werden.",
+    dataImportError: "Diese Datei konnte nicht importiert werden. Nutze ein Pizza-Geek-Backup als JSON.",
     addPhoto: "Foto hinzufugen",
     removePhoto: "Foto entfernen",
     rating: "Bewertung",
@@ -557,6 +649,7 @@ const ovenOptions: Array<{ value: OvenType; label: string }> = [
 ];
 
 const presetKeys = Object.keys(FERMENTATION_PRESETS) as FermentationPresetKey[];
+const plannerShortcutPresets: FermentationPresetKey[] = ["rapid", "sameDay", "overnight", "twoDay", "threeDay"];
 
 const sizePresets: Record<string, Record<number, number>> = {
   default: { 10: 180, 12: 250, 14: 320, 16: 400, 18: 500 },
@@ -572,6 +665,46 @@ const sizePresets: Record<string, Record<number, number>> = {
   Flammkuchen: { 10: 160, 12: 200, 14: 250, 16: 320, 18: 400 },
   Lahmacun: { 10: 120, 12: 150, 14: 180, 16: 220, 18: 260 }
 };
+
+function getBatchLabels(styleId: string, labels: CopyText) {
+  if (isLoafStyleId(styleId)) {
+    return {
+      count: labels.loaves,
+      weight: labels.loafWeight,
+      perUnit: labels.perLoaf
+    };
+  }
+
+  if (isBreadStyleId(styleId)) {
+    return {
+      count: labels.pieces,
+      weight: labels.pieceWeight,
+      perUnit: labels.perPiece
+    };
+  }
+
+  return {
+    count: labels.doughBalls,
+    weight: labels.ballWeight,
+    perUnit: labels.perDough
+  };
+}
+
+function getBatchDescriptor(input: CalculatorInput, style: PizzaStyle, locale: LocaleCode): string {
+  if (isLoafStyleId(style.id)) {
+    return locale === "de"
+      ? `${input.doughBalls} Laib${input.doughBalls === 1 ? "" : "e"} mit ${input.ballWeight}g`
+      : `${input.doughBalls} loaf${input.doughBalls === 1 ? "" : "s"} at ${input.ballWeight}g`;
+  }
+
+  if (isBreadStyleId(style.id)) {
+    return locale === "de"
+      ? `${input.doughBalls} Stueck${input.doughBalls === 1 ? "" : "e"} mit ${input.ballWeight}g`
+      : `${input.doughBalls} piece${input.doughBalls === 1 ? "" : "s"} at ${input.ballWeight}g`;
+  }
+
+  return `${input.doughBalls} x ${input.ballWeight}g`;
+}
 
 function numberValue(value: string, fallback = 0): number {
   const parsed = Number.parseFloat(value);
@@ -612,6 +745,20 @@ function formatDateTime(value: string, locale: LocaleCode): string {
   }).format(new Date(value));
 }
 
+function isStandaloneDisplayMode() {
+  if (typeof window === "undefined") return false;
+  const navigatorWithStandalone = window.navigator as Navigator & { standalone?: boolean };
+  return window.matchMedia("(display-mode: standalone)").matches || navigatorWithStandalone.standalone === true;
+}
+
+function formatPlannerTarget(value: Date, locale: LocaleCode): string {
+  return new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-US", {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(value);
+}
+
 function formatMoney(value: number, currency: string, locale: LocaleCode) {
   return new Intl.NumberFormat(locale === "de" ? "de-DE" : "en-US", {
     style: "currency",
@@ -619,7 +766,35 @@ function formatMoney(value: number, currency: string, locale: LocaleCode) {
   }).format(value);
 }
 
-function styleRange(result: DoughResult, field: "hydration" | "salt" | "oil" | "sugar", value: number) {
+function addHours(date: Date, hours: number): Date {
+  return new Date(date.getTime() + hours * 60 * 60 * 1000);
+}
+
+function roundDateUp(date: Date, incrementMinutes = 30): Date {
+  const rounded = new Date(date);
+  rounded.setSeconds(0, 0);
+  const currentMinutes = rounded.getMinutes();
+  const nextMinutes = Math.ceil(currentMinutes / incrementMinutes) * incrementMinutes;
+  if (nextMinutes >= 60) {
+    rounded.setHours(rounded.getHours() + 1, 0, 0, 0);
+    return rounded;
+  }
+  rounded.setMinutes(nextMinutes, 0, 0);
+  return rounded;
+}
+
+function getPresetDurationHours(preset: FermentationPresetKey): number {
+  const selected = FERMENTATION_PRESETS[preset];
+  return (
+    selected.roomTempHours +
+    selected.cellarTempHours +
+    selected.coldBulkHours +
+    selected.coldBallHours +
+    selected.finalRiseHours
+  );
+}
+
+function styleRange(result: DoughResult, field: "hydration" | "salt" | "oil" | "sugar", value: number): "ok" | "danger" {
   const range = result.style[field];
   if (value < range.min || value > range.max) return "danger";
   return "ok";
@@ -627,6 +802,35 @@ function styleRange(result: DoughResult, field: "hydration" | "salt" | "oil" | "
 
 function clampTo(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function createMobileSlider(min: number, max: number, step = 1) {
+  return { min, max, step, mobileOnly: true };
+}
+
+function createStyleSlider(min: number, max: number, padding: number, floor: number, ceiling: number, step = 0.1) {
+  const decimals = step < 1 ? 1 : 0;
+  return createMobileSlider(
+    Number(clampTo(min - padding, floor, ceiling).toFixed(decimals)),
+    Number(clampTo(max + padding, floor, ceiling).toFixed(decimals)),
+    step
+  );
+}
+
+function createTemperatureSlider(minF: number, maxF: number, unit: TemperatureUnit, step = 1) {
+  return createMobileSlider(displayTemperatureValue(minF, unit), displayTemperatureValue(maxF, unit), step);
+}
+
+function getCountSlider(styleId: string) {
+  if (isLoafStyleId(styleId)) return createMobileSlider(1, 8, 1);
+  if (isBreadStyleId(styleId)) return createMobileSlider(1, 10, 1);
+  return createMobileSlider(1, 12, 1);
+}
+
+function getWeightSlider(styleId: string) {
+  if (isLoafStyleId(styleId)) return createMobileSlider(300, 1200, 10);
+  if (isBreadStyleId(styleId)) return createMobileSlider(150, 900, 10);
+  return createMobileSlider(160, 550, 5);
 }
 
 function scoreAgainstRange(value: number, min: number, recommended: number, max: number) {
@@ -683,6 +887,23 @@ function getPresetLabel(key: FermentationPresetKey, locale: LocaleCode): string 
   };
 
   return labels[key];
+}
+
+function getPlannerShortcutLabel(key: FermentationPresetKey, labels: CopyText): string {
+  switch (key) {
+    case "rapid":
+      return labels.rapidTarget;
+    case "sameDay":
+      return labels.todayTarget;
+    case "overnight":
+      return labels.overnightTarget;
+    case "twoDay":
+      return labels.twoDayTarget;
+    case "threeDay":
+      return labels.threeDayTarget;
+    default:
+      return labels.quickSchedule;
+  }
 }
 
 function getSizePresetForStyle(styleName: string) {
@@ -910,45 +1131,6 @@ function getWaterSummaryText(result: DoughResult, locale: LocaleCode, unit: Temp
       };
 }
 
-function getFermentationStageContent(
-  key: "bulk" | "temper" | "cold-ball" | "cold-bulk" | "cellar",
-  locale: LocaleCode
-): { title: string; subtitle: string; note?: string } {
-  const en = {
-    bulk: { title: "Bulk Ferment", subtitle: "room temp" },
-    temper: { title: "Temper", subtitle: "warm up before baking" },
-    "cold-ball": { title: "Cold Ball", subtitle: "shaped balls in fridge" },
-    "cold-bulk": {
-      title: "Cold Bulk",
-      subtitle: "bulk dough in fridge",
-      note: "Ferment as one mass, then divide and ball after. Better structure retention for long ferments at high hydration."
-    },
-    cellar: {
-      title: "Cellar Ferment",
-      subtitle: "50-65°F / 10-18°C",
-      note: "European method - slower than room temp, warmer than fridge."
-    }
-  } as const;
-
-  const de = {
-    bulk: { title: "Stockgare", subtitle: "bei Raumtemperatur" },
-    temper: { title: "Temperieren", subtitle: "vor dem Backen akklimatisieren" },
-    "cold-ball": { title: "Kalte Stueckgare", subtitle: "geformte Teiglinge im Kuehlschrank" },
-    "cold-bulk": {
-      title: "Kalte Stockgare",
-      subtitle: "Teig als Masse im Kuehlschrank",
-      note: "Erst als Masse kalt fuhren, danach teilen und rundschleifen. Das bringt bei langen, weichen Teigen oft mehr Struktur."
-    },
-    cellar: {
-      title: "Kellergare",
-      subtitle: "10-18°C / 50-65°F",
-      note: "Europaische Methode - langsamer als Raumtemperatur, waermer als der Kuehlschrank."
-    }
-  } as const;
-
-  return locale === "de" ? de[key] : en[key];
-}
-
 function getSauceUiCopy(locale: LocaleCode) {
   return locale === "de"
     ? {
@@ -1131,6 +1313,8 @@ function localizePlanStep(
   const roomTemp = formatTemperature(input.fermentation.roomTempF, unit);
   const cellarTemp = formatTemperature(input.fermentation.cellarTempF, unit);
   const fridgeTemp = formatTemperature(input.fermentation.fridgeTempF, unit);
+  const loafWorkflow = isLoafStyleId(input.styleId);
+  const tinLoaf = isTinLoafStyleId(input.styleId);
 
   switch (step.label) {
     case "Mix Poolish":
@@ -1216,11 +1400,11 @@ function localizePlanStep(
       return locale === "de"
         ? {
             label: "Kalte Stockgare",
-            description: `${input.fermentation.coldBulkHours}h bei etwa ${fridgeTemp} als Masse. Danach teilen und rundschleifen.`
+            description: `${input.fermentation.coldBulkHours}h bei etwa ${fridgeTemp} als Masse.${loafWorkflow ? " Danach vorformen und entspannen lassen." : " Danach teilen und rundschleifen."}`
           }
         : {
             label: "Cold Bulk",
-            description: `${input.fermentation.coldBulkHours}h @ ${fridgeTemp} as one mass, then divide and ball.`
+            description: `${input.fermentation.coldBulkHours}h @ ${fridgeTemp} as one mass${loafWorkflow ? ", then pre-shape and rest." : ", then divide and ball."}`
           };
     case "Divide and ball":
       return locale === "de"
@@ -1232,6 +1416,46 @@ function localizePlanStep(
             label: "Divide and ball",
             description: "Portion the dough and ball it after the cold bulk stage."
           };
+    case "Pre-shape":
+      return locale === "de"
+        ? {
+            label: "Vorformen",
+            description:
+              input.doughBalls > 1
+                ? `In ${input.doughBalls} Stuecke teilen, locker vorformen und fuer den Endformschluss entspannen lassen.`
+                : "Den Teig locker vorformen und vor dem Endformen entspannen lassen."
+          }
+        : {
+            label: "Pre-shape",
+            description:
+              input.doughBalls > 1
+                ? `Divide into ${input.doughBalls} pieces, pre-shape them gently, and let them relax before the final shape.`
+                : "Pre-shape the dough gently and let it relax before the final shape."
+          };
+    case "Bench rest":
+      return locale === "de"
+        ? {
+            label: "Zwischenruhe",
+            description: "20 Minuten entspannen lassen, damit der Teig vor dem Endformen nachgibt."
+          }
+        : {
+            label: "Bench rest",
+            description: "Rest for 20 minutes so the dough relaxes before the final shape."
+          };
+    case "Final shape":
+      return locale === "de"
+        ? {
+            label: "Endformen",
+            description: tinLoaf
+              ? "Straff zum Kastenlaib formen und mit dem Schluss nach unten in die gefettete Form setzen."
+              : "Straff formen und mit dem Schluss nach oben in den bemehlten Garkorb oder in eine ausgelegte Schuessel setzen."
+          }
+        : {
+            label: "Final shape",
+            description: tinLoaf
+              ? "Shape into a tight pan loaf and place it seam-side down in the greased tin."
+              : "Shape tightly and place it seam-side up in a floured banneton or lined bowl."
+          };
     case "Cold Ball":
       return locale === "de"
         ? {
@@ -1241,6 +1465,16 @@ function localizePlanStep(
         : {
             label: "Cold Ball",
             description: `${input.fermentation.coldBallHours}h @ ${fridgeTemp}.`
+          };
+    case "Cold Proof":
+      return locale === "de"
+        ? {
+            label: "Kalte Gare",
+            description: `${input.fermentation.coldBallHours}h bei etwa ${fridgeTemp} im Korb oder in der Form.`
+          }
+        : {
+            label: "Cold Proof",
+            description: `${input.fermentation.coldBallHours}h @ ${fridgeTemp} in the basket or tin.`
           };
     case "Temper":
       return locale === "de"
@@ -1262,15 +1496,33 @@ function localizePlanStep(
             label: "Ball Proof",
             description: `${input.fermentation.finalRiseHours}h final proof before baking.`
           };
+    case "Final Proof":
+      return locale === "de"
+        ? {
+            label: "Endgare",
+            description: `${input.fermentation.finalRiseHours}h bei etwa ${roomTemp}, bis der Teig nach sanftem Druck langsam zurueckkommt.`
+          }
+        : {
+            label: "Final Proof",
+            description: `${input.fermentation.finalRiseHours}h @ ${roomTemp} until the dough springs back slowly when pressed.`
+          };
     case "Ready to bake":
       return locale === "de"
         ? {
             label: "Bereit zum Backen",
-            description: "Vorheizen, formen, belegen und backen."
+            description: loafWorkflow
+              ? tinLoaf
+                ? "Ofen vorheizen, den Kastenlaib ausbacken und vor dem Schneiden vollstaendig auskuehlen lassen."
+                : "Ofen vorheizen, den Laib einschneiden, mit Dampf oder Deckel anbacken und vollstaendig auskuehlen lassen."
+              : "Vorheizen, formen, belegen und backen."
           }
         : {
             label: "Ready to bake",
-            description: "Preheat, stretch, top, and bake."
+            description: loafWorkflow
+              ? tinLoaf
+                ? "Preheat, bake the tin loaf through, and cool fully before slicing."
+                : "Preheat, score the loaf, start with steam or a cover, then bake and cool fully."
+              : "Preheat, stretch, top, and bake."
           };
     default:
       return { label: step.label, description: step.description };
@@ -1291,6 +1543,8 @@ function getMethodSteps(
   const waterSummary = getWaterSummaryText(result, locale, unit);
   const bakeDetail = getOvenDetailText(input, copy[locale], unit);
   const bakeWindow = formatBakeWindow(result.oven, locale, unit, bakeDetail);
+  const loafWorkflow = isLoafStyleId(input.styleId);
+  const tinLoaf = isTinLoafStyleId(input.styleId);
 
   if (input.preferment.kind !== "none") {
     steps.push(
@@ -1374,12 +1628,31 @@ function getMethodSteps(
   if (input.fermentation.coldBulkHours > 0) {
     steps.push(
       locale === "de"
-        ? `Kalte Stockgare ${input.fermentation.coldBulkHours}h im Kuehlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}. Danach teilen und rundschleifen.`
-        : `Cold bulk ${input.fermentation.coldBulkHours}h @ ${formatTemperature(input.fermentation.fridgeTempF, unit)} as one mass, then divide and ball.`
+        ? `Kalte Stockgare ${input.fermentation.coldBulkHours}h im Kuehlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}.${loafWorkflow ? " Danach locker vorformen und entspannen lassen." : " Danach teilen und rundschleifen."}`
+        : `Cold bulk ${input.fermentation.coldBulkHours}h @ ${formatTemperature(input.fermentation.fridgeTempF, unit)} as one mass${loafWorkflow ? ", then pre-shape and rest." : ", then divide and ball."}`
     );
   }
 
-  if (!result.style.panStyle) {
+  if (loafWorkflow) {
+    steps.push(
+      locale === "de"
+        ? input.doughBalls > 1
+          ? `In ${input.doughBalls} Stuecke zu je etwa ${input.ballWeight}g teilen, locker vorformen und 20 Minuten entspannen lassen.`
+          : "Den Teig locker vorformen und 20 Minuten entspannen lassen."
+        : input.doughBalls > 1
+          ? `Divide into ${input.doughBalls} pieces around ${input.ballWeight}g each, pre-shape gently, and rest 20 minutes.`
+          : "Pre-shape the dough gently, then rest it for 20 minutes."
+    );
+    steps.push(
+      locale === "de"
+        ? tinLoaf
+          ? "Danach straff zu einem Kastenlaib formen und mit dem Schluss nach unten in die gefettete Form setzen."
+          : "Danach straff formen und mit dem Schluss nach oben in den bemehlten Garkorb oder in eine ausgelegte Schuessel legen."
+        : tinLoaf
+          ? "Final-shape into a tight pan loaf and place it seam-side down in the greased tin."
+          : "Final-shape tightly and place the loaf seam-side up in a floured banneton or lined bowl."
+    );
+  } else if (!result.style.panStyle) {
     const divideStep =
       locale === "de"
         ? `In ${input.doughBalls} Teigling${input.doughBalls === 1 ? "" : "e"} zu je etwa ${input.ballWeight}g teilen und rundschleifen.`
@@ -1393,12 +1666,16 @@ function getMethodSteps(
   if (input.fermentation.coldBallHours > 0) {
     steps.push(
       locale === "de"
-        ? `Kalte Stueckgare ${input.fermentation.coldBallHours}h im Kuehlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}.`
-        : `Cold ball ${input.fermentation.coldBallHours}h @ ${formatTemperature(input.fermentation.fridgeTempF, unit)} after dividing.`
+        ? loafWorkflow
+          ? `Kalte Gare ${input.fermentation.coldBallHours}h im Kuehlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}.`
+          : `Kalte Stueckgare ${input.fermentation.coldBallHours}h im Kuehlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}.`
+        : loafWorkflow
+          ? `Cold proof ${input.fermentation.coldBallHours}h @ ${formatTemperature(input.fermentation.fridgeTempF, unit)} after shaping.`
+          : `Cold ball ${input.fermentation.coldBallHours}h @ ${formatTemperature(input.fermentation.fridgeTempF, unit)} after dividing.`
     );
   }
 
-  if (result.style.panStyle) {
+  if (result.style.panStyle && !tinLoaf) {
     steps.push(
       locale === "de"
         ? "Die Form grosszuegig oelen, den Teig einlegen und vor dem finalen Ausziehen entspannt aufgehen lassen."
@@ -1409,8 +1686,12 @@ function getMethodSteps(
   if (input.fermentation.finalRiseHours > 0) {
     steps.push(
       locale === "de"
-        ? `Temperieren ${input.fermentation.finalRiseHours}h bei etwa ${formatTemperature(input.fermentation.roomTempF, unit)} vor dem Backen.`
-        : `Temper ${input.fermentation.finalRiseHours}h @ ${formatTemperature(input.fermentation.roomTempF, unit)} before baking.`
+        ? loafWorkflow
+          ? `Endgare ${input.fermentation.finalRiseHours}h bei etwa ${formatTemperature(input.fermentation.roomTempF, unit)}, bis der Teig auf sanften Druck langsam zurueckkommt.`
+          : `Temperieren ${input.fermentation.finalRiseHours}h bei etwa ${formatTemperature(input.fermentation.roomTempF, unit)} vor dem Backen.`
+        : loafWorkflow
+          ? `Final proof ${input.fermentation.finalRiseHours}h @ ${formatTemperature(input.fermentation.roomTempF, unit)} until the dough springs back slowly when pressed.`
+          : `Temper ${input.fermentation.finalRiseHours}h @ ${formatTemperature(input.fermentation.roomTempF, unit)} before baking.`
     );
   }
 
@@ -1430,8 +1711,16 @@ function getMethodSteps(
 
   steps.push(
     locale === "de"
-      ? `Backen mit ${bakeWindow}, bis Boden und Rand sauber ausgebacken sind und die Oberflaeche die gewuenschte Farbe hat.`
-      : `Bake with ${bakeWindow} until the bottom is crisp and the top is properly browned.`
+      ? loafWorkflow
+        ? tinLoaf
+          ? `Backen mit ${bakeWindow}, bis der Kastenlaib gleichmaessig gebraeunt ist. Danach aus der Form nehmen und vor dem Schneiden vollstaendig auskuehlen lassen.`
+          : `Den Laib einschneiden und mit ${bakeWindow} backen. Zu Beginn Dampf geben oder abdecken, dann ausbacken und vor dem Schneiden vollstaendig auskuehlen lassen.`
+        : `Backen mit ${bakeWindow}, bis Boden und Rand sauber ausgebacken sind und die Oberflaeche die gewuenschte Farbe hat.`
+      : loafWorkflow
+        ? tinLoaf
+          ? `Bake with ${bakeWindow} until the pan loaf is evenly browned. De-pan and cool completely before slicing.`
+          : `Score the loaf and bake with ${bakeWindow}. Start with steam or a cover, then finish the bake and cool completely before slicing.`
+        : `Bake with ${bakeWindow} until the bottom is crisp and the top is properly browned.`
   );
 
   return steps;
@@ -1539,27 +1828,34 @@ export function App() {
   const [savedRecipes, setSavedRecipes] = usePersistentState<SavedRecipe[]>(
     STORAGE_KEYS.saved,
     [],
-    { legacyKeys: ["pizza-nerd.saved"] }
+    { legacyKeys: ["pizza-nerd.saved"], deserialize: normalizeSavedRecipes }
   );
   const [bakeLog, setBakeLog] = usePersistentState<BakeLogEntry[]>(
     STORAGE_KEYS.bakeLog,
     [],
-    { legacyKeys: ["pizza-nerd.bake-log"] }
+    { legacyKeys: ["pizza-nerd.bake-log"], deserialize: normalizeBakeLog }
   );
-  const [preset, setPreset] = useState<FermentationPresetKey>(() => choosePresetForStyle(createDefaultInput().styleId));
-  const [planMode, setPlanMode] = useState<"starting-now" | "ready-by">("starting-now");
+  const persistedStyleId = normalizeCalculatorInput(input).styleId;
+  const [preset, setPreset] = useState<FermentationPresetKey>(() => choosePresetForStyle(persistedStyleId));
+  const [planMode, setPlanMode] = useState<ScheduleMode>("starting-now");
   const [readyBy, setReadyBy] = useState(() => {
     const date = new Date(Date.now() + 48 * 60 * 60 * 1000);
     date.setMinutes(0, 0, 0);
     return toLocalDateTimeInputValue(date);
   });
   const [copyMethodState, setCopyMethodState] = useState<"idle" | "copied" | "failed">("idle");
+  const [dataTransferNotice, setDataTransferNotice] = useState<{
+    tone: "success" | "error";
+    message: string;
+  } | null>(null);
   const [openPanels, setOpenPanels] = useState<Record<PanelKey, boolean>>(DEFAULT_PANEL_STATE);
   const [showFermentationDetails, setShowFermentationDetails] = useState(false);
   const [showSauceRecipe, setShowSauceRecipe] = useState(false);
-  const [recipeName, setRecipeName] = useState(() =>
-    getDefaultRecipeName(normalizeCalculatorInput(input).styleId, storedSettings.language === "de" ? "de" : "en")
-  );
+  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isInstalled, setIsInstalled] = useState(() => isStandaloneDisplayMode());
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+  const [offlineReady, setOfflineReady] = useState(false);
+  const [recipeName, setRecipeName] = useState(() => getDefaultRecipeName(persistedStyleId, storedSettings.language === "de" ? "de" : "en"));
   const [logDraft, setLogDraft] = useState<{
     rating: number;
     outcome: BakeLogEntry["outcome"];
@@ -1567,23 +1863,24 @@ export function App() {
     photoDataUrl?: string;
     photoName?: string;
   }>({
-    rating: 5,
-    outcome: "keeper",
-    notes: ""
+      rating: 5,
+      outcome: "keeper",
+      notes: ""
+  });
+  const [recentStyleByProductMode, setRecentStyleByProductMode] = useState<Record<ProductMode, string>>(() => {
+    const initialMode = getProductModeForStyleId(persistedStyleId);
+    return {
+      pizza: initialMode === "pizza" ? persistedStyleId : getFallbackStyleIdForProductMode("pizza"),
+      bread: initialMode === "bread" ? persistedStyleId : getFallbackStyleIdForProductMode("bread")
+    };
   });
 
-  const settings = useMemo(() => {
-    const persistedSettings = storedSettings as Partial<AppSettings>;
-    const language = persistedSettings.language === "de" ? "de" : DEFAULT_SETTINGS.language;
-    const localeDefaults = getLocaleDefaults(language);
-    return {
-      language,
-      temperatureUnit: localeDefaults.temperatureUnit,
-      sizeUnit: localeDefaults.sizeUnit,
-      theme: DEFAULT_SETTINGS.theme,
-      ...persistedSettings
-    };
-  }, [storedSettings]);
+  const settings = useMemo(
+    () => resolveAppSettings(storedSettings as Partial<AppSettings>, persistedStyleId),
+    [persistedStyleId, storedSettings]
+  );
+  const isBreadMode = settings.productMode === "bread";
+  const isGuidedMode = settings.mode === "guided";
   const resolvedCostSettings = useMemo(
     () => ({
       ...defaultCostSettings(getLocaleDefaults(settings.language).currency),
@@ -1626,13 +1923,31 @@ export function App() {
   const mainDoughWaterGrams = prefermentMode === "none" ? 0 : (result.ingredients.mainWater ?? 0);
   const mainDoughYeastGrams = prefermentMode === "none" ? 0 : (result.ingredients.mainYeast ?? 0);
   const activeStyle = result.style;
-  const styleGroups = useMemo<StyleGroup[]>(() => {
+  const loafWorkflow = isLoafStyleId(activeStyle.id);
+  const tinLoaf = isTinLoafStyleId(activeStyle.id);
+  const batchLabels = getBatchLabels(activeStyle.id, t);
+  const batchDescriptor = getBatchDescriptor(normalizedInput, activeStyle, settings.language);
+  const doughCountSlider = getCountSlider(activeStyle.id);
+  const doughWeightSlider = getWeightSlider(activeStyle.id);
+  const hydrationSlider = createStyleSlider(result.style.hydration.min, result.style.hydration.max, 4, 35, 100, 0.5);
+  const saltSlider = createStyleSlider(result.style.salt.min, result.style.salt.max, 0.5, 0.5, 5, 0.1);
+  const oilSlider = createStyleSlider(result.style.oil.min, result.style.oil.max, 2, 0, 14, 0.1);
+  const sugarSlider = createStyleSlider(result.style.sugar.min, result.style.sugar.max, 2, 0, 14, 0.1);
+  const styleGroups = useMemo<StylePickerGroup[]>(() => {
     const primaryStyles = PIZZA_STYLES.filter((style) => !style.parentStyleId);
     return primaryStyles.map((parent) => ({
       parent,
       variants: PIZZA_STYLES.filter((style) => style.parentStyleId === parent.id)
     }));
   }, []);
+  const visibleStyleGroups = useMemo(
+    () =>
+      styleGroups.filter(({ parent }) =>
+        settings.productMode === "bread" ? getProductModeForStyleId(parent.id) === "bread" : getProductModeForStyleId(parent.id) === "pizza"
+      ),
+    [settings.productMode, styleGroups]
+  );
+  const breadProfiles = useMemo(() => getBreadProfiles(settings.language), [settings.language]);
   const usesPanGeometry = Boolean(activeStyle.panStyle);
   const cost = useMemo(
     () => calculateCost(result, resolvedCostSettings, normalizedInput.doughBalls),
@@ -1645,9 +1960,9 @@ export function App() {
   );
   const panelSummaries = useMemo(
     () => ({
-      settings: `${settings.language === "de" ? t.german : t.english} · °${settings.temperatureUnit} · ${settings.sizeUnit === "in" ? t.inches : t.centimeters} · ${settings.theme === "dark" ? t.dark : t.light}`,
+      settings: `${settings.language === "de" ? t.german : t.english} · ${settings.productMode === "bread" ? t.breadProduct : t.pizzaProduct} · ${settings.mode === "guided" ? t.guidedMode : t.studioMode} · °${settings.temperatureUnit} · ${settings.sizeUnit === "in" ? t.inches : t.centimeters} · ${settings.theme === "dark" ? t.dark : t.light}`,
       styles: `${activeStyle.name} · ${activeStyle.origin}`,
-      doughSetup: `${normalizedInput.doughBalls} x ${normalizedInput.ballWeight}g · ${normalizedInput.hydrationPercent}% ${t.hydration.toLowerCase()}`,
+      doughSetup: `${batchDescriptor} · ${normalizedInput.hydrationPercent}% ${t.hydration.toLowerCase()}`,
       fermentation: `${getPresetLabel(preset, settings.language)} · ${result.totalFermentationHours}h ${t.totalTime.toLowerCase()}`,
       doughStudio: normalizedInput.flourBlendEnabled ? `${prefermentName} · ${t.flourBlend}` : prefermentName,
       sauce: normalizedInput.sauce.enabled
@@ -1657,26 +1972,26 @@ export function App() {
         planMode === "ready-by"
           ? `${t.readyBy}: ${formatDateTime(new Date(readyBy).toISOString(), settings.language)}`
           : `${result.totalFermentationHours}h ${t.totalTime.toLowerCase()}`,
-      formula: `${displayRecipeName} · ${normalizedInput.doughBalls} x ${normalizedInput.ballWeight}g`,
+      formula: `${displayRecipeName} · ${batchDescriptor}`,
       quality:
         qualitySignals.length > 2
           ? `${qualitySignals[0]?.label} · ${qualitySignals[1]?.label} +${qualitySignals.length - 2}`
           : qualitySignals.map((signal) => signal.label).join(" · "),
       guidance: `${result.totalFermentationHours}h · ${formatTemperature(result.oven.tempF, settings.temperatureUnit)}`,
       method: `${result.totalFermentationHours}h · ${formatTemperature(result.oven.tempF, settings.temperatureUnit)}`,
-      cost: `${formatMoney(cost.perBall, cost.currency, settings.language)} · ${t.perDough.toLowerCase()}`,
+      cost: `${formatMoney(cost.perBall, cost.currency, settings.language)} · ${batchLabels.perUnit.toLowerCase()}`,
       saved: `${savedRecipes.length} ${t.savedCount}`,
       journal: `${bakeLog.length} ${t.journalCount}`
     }),
     [
       activeStyle.name,
       activeStyle.origin,
+      batchDescriptor,
+      batchLabels.perUnit,
       bakeLog.length,
       cost,
       displayRecipeName,
       localizedSelectedSauceOption,
-      normalizedInput.ballWeight,
-      normalizedInput.doughBalls,
       normalizedInput.flourBlendEnabled,
       normalizedInput.hydrationPercent,
       normalizedInput.sauce.enabled,
@@ -1706,6 +2021,28 @@ export function App() {
       })),
     [plan, normalizedInput, settings.language, settings.temperatureUnit]
   );
+  const timelineItems = useMemo<PlannerTimelineItem[]>(
+    () =>
+      localizedPlan.map((step) => ({
+        id: `${step.label}-${step.time.toISOString()}`,
+        timeLabel: formatDateTime(step.time.toISOString(), settings.language),
+        title: step.label,
+        description: step.description
+      })),
+    [localizedPlan, settings.language]
+  );
+  const planStartValue = useMemo(
+    () => (localizedPlan[0] ? formatDateTime(localizedPlan[0].time.toISOString(), settings.language) : "--"),
+    [localizedPlan, settings.language]
+  );
+  const planBakeValue = useMemo(
+    () =>
+      localizedPlan.length > 0
+        ? formatDateTime(localizedPlan[localizedPlan.length - 1].time.toISOString(), settings.language)
+        : "--",
+    [localizedPlan, settings.language]
+  );
+  const plannerShortcutReference = useMemo(() => roundDateUp(new Date()), [planMode, readyBy]);
   const methodSteps = useMemo(
     () => getMethodSteps(normalizedInput, result, settings.language, settings.temperatureUnit),
     [normalizedInput, result, settings.language, settings.temperatureUnit]
@@ -1784,6 +2121,59 @@ export function App() {
     const timer = window.setTimeout(() => setCopyMethodState("idle"), 1800);
     return () => window.clearTimeout(timer);
   }, [copyMethodState]);
+
+  useEffect(() => {
+    const onBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPromptEvent(event as BeforeInstallPromptEvent);
+    };
+
+    const onInstalled = () => {
+      setIsInstalled(true);
+      setInstallPromptEvent(null);
+    };
+
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+
+    setIsInstalled(isStandaloneDisplayMode());
+    setOfflineReady("serviceWorker" in navigator);
+
+    window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isGuidedMode) return;
+    setShowFermentationDetails(false);
+    setShowSauceRecipe(false);
+    setOpenPanels((current) => ({
+      ...current,
+      doughSetup: true,
+      doughStudio: false,
+      cost: false,
+      saved: false,
+      journal: false
+    }));
+  }, [isGuidedMode]);
+
+  useEffect(() => {
+    if (!isBreadMode) return;
+    setShowSauceRecipe(false);
+    setOpenPanels((current) => ({
+      ...current,
+      sauce: false
+    }));
+  }, [isBreadMode]);
 
   const setPartial = (patch: Partial<CalculatorInput>) => {
     setInput((current) => ({ ...normalizeCalculatorInput(current), ...patch }));
@@ -1866,7 +2256,6 @@ export function App() {
       <button
         className={`iconButton panelToggle ${openPanels[key] ? "open" : ""}`}
         type="button"
-        aria-expanded={openPanels[key]}
         aria-label={toggleLabel}
         title={toggleLabel}
         onClick={() => togglePanel(key)}
@@ -1876,23 +2265,83 @@ export function App() {
     );
   };
 
-  const updateTheme = (theme: ThemeMode) => {
+  const patchSettings = (patch: Partial<AppSettings>) => {
     setSettings((current) => ({
       ...DEFAULT_SETTINGS,
       ...current,
-      theme
+      ...patch
     }));
+  };
+
+  const applyCalculatorInput = (nextInput: CalculatorInput, nextRecipeName?: string) => {
+    const normalized = normalizeCalculatorInput(nextInput);
+    const converted =
+      normalized.pan.unit === settings.sizeUnit
+        ? normalized
+        : {
+            ...normalized,
+            pan: convertPanToUnit(normalized.pan, settings.sizeUnit)
+          };
+    const nextProductMode = getProductModeForStyleId(converted.styleId);
+    const nextState =
+      nextProductMode === "bread"
+        ? {
+            ...converted,
+            sauce: {
+              ...converted.sauce,
+              enabled: false,
+              gramsPerPizza: 0
+            }
+          }
+        : converted;
+
+    patchSettings({ productMode: nextProductMode });
+    setRecentStyleByProductMode((current) => ({
+      ...current,
+      [nextProductMode]: nextState.styleId
+    }));
+    setInput(nextState);
+    setPreset(choosePresetForStyle(nextState.styleId));
+    setRecipeName(nextRecipeName ?? getDefaultRecipeName(nextState.styleId, settings.language));
+
+    if (isGuidedMode && typeof window !== "undefined" && window.innerWidth <= 760) {
+      setOpenPanels((current) => ({
+        ...current,
+        styles: false,
+        doughSetup: true
+      }));
+    }
+  };
+
+  const applyStyleSelection = (styleId: string) => {
+    applyCalculatorInput(createDefaultInput(styleId));
+  };
+
+  const updateTheme = (theme: ThemeMode) => {
+    patchSettings({ theme });
+  };
+
+  const updateWorkspaceMode = (mode: WorkspaceMode) => {
+    patchSettings({ mode });
+  };
+
+  const updateProductMode = (productMode: ProductMode) => {
+    patchSettings({ productMode });
+
+    if (getProductModeForStyleId(normalizedInput.styleId) === productMode) {
+      return;
+    }
+
+    applyStyleSelection(getFallbackStyleIdForProductMode(productMode, recentStyleByProductMode[productMode]));
   };
 
   const updateLanguage = (nextLanguage: LocaleCode) => {
     const localeDefaults = getLocaleDefaults(nextLanguage);
-    setSettings((current) => ({
-      ...DEFAULT_SETTINGS,
-      ...current,
+    patchSettings({
       language: nextLanguage,
       temperatureUnit: localeDefaults.temperatureUnit,
       sizeUnit: localeDefaults.sizeUnit
-    }));
+    });
     setInput((current) => {
       const normalized = normalizeCalculatorInput(current);
       return {
@@ -1912,12 +2361,12 @@ export function App() {
     );
   };
 
+  const updateTemperatureUnit = (nextUnit: TemperatureUnit) => {
+    patchSettings({ temperatureUnit: nextUnit });
+  };
+
   const updateSizeUnit = (nextUnit: SizeUnit) => {
-    setSettings((current) => ({
-      ...DEFAULT_SETTINGS,
-      ...current,
-      sizeUnit: nextUnit
-    }));
+    patchSettings({ sizeUnit: nextUnit });
     setInput((current) => {
       const normalized = normalizeCalculatorInput(current);
       return {
@@ -1928,11 +2377,7 @@ export function App() {
   };
 
   const onStyleChange = (styleId: string) => {
-    const next = createDefaultInput(styleId);
-    next.pan = convertPanToUnit(next.pan, settings.sizeUnit);
-    setInput(next);
-    setPreset(choosePresetForStyle(styleId));
-    setRecipeName(getDefaultRecipeName(styleId, settings.language));
+    applyStyleSelection(styleId);
   };
 
   const onPresetChange = (key: FermentationPresetKey) => {
@@ -1946,6 +2391,47 @@ export function App() {
       )
     );
   };
+
+  const applyPlannerShortcut = (key: FermentationPresetKey, targetDate: Date) => {
+    setPlanMode("ready-by");
+    setReadyBy(toLocalDateTimeInputValue(targetDate));
+    setPreset(key);
+    setFermentation(
+      scheduleFromPreset(
+        key,
+        normalizedInput.fermentation.roomTempF,
+        normalizedInput.fermentation.cellarTempF,
+        normalizedInput.fermentation.fridgeTempF
+      )
+    );
+  };
+
+  const plannerShortcuts = useMemo<PlannerShortcut[]>(() => {
+    const readyByTimestamp = new Date(readyBy).getTime();
+
+    return plannerShortcutPresets.map((key) => {
+      const durationHours = getPresetDurationHours(key);
+      const targetDate = addHours(plannerShortcutReference, durationHours);
+      return {
+        id: key,
+        label: getPlannerShortcutLabel(key, t),
+        note: `${durationHours}h · ${formatPlannerTarget(targetDate, settings.language)}`,
+        active:
+          planMode === "ready-by" && preset === key && Math.abs(targetDate.getTime() - readyByTimestamp) < 60_000,
+        onSelect: () => applyPlannerShortcut(key, targetDate)
+      };
+    });
+  }, [
+    normalizedInput.fermentation.cellarTempF,
+    normalizedInput.fermentation.fridgeTempF,
+    normalizedInput.fermentation.roomTempF,
+    planMode,
+    preset,
+    plannerShortcutReference,
+    readyBy,
+    settings.language,
+    t
+  ]);
 
   const setBlendItem = (index: number, patch: Partial<FlourBlendItem>) => {
     setInput((current) => {
@@ -2025,11 +2511,66 @@ export function App() {
     URL.revokeObjectURL(url);
   };
 
+  const exportRecipeData = () => {
+    if (typeof document === "undefined") return;
+
+    try {
+      const bundle = createPortableDataBundle(savedRecipes, bakeLog);
+      const payload = serializePortableDataBundle(bundle);
+      const blob = new Blob([payload], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = createPortableDataFileName();
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      setDataTransferNotice({ tone: "success", message: t.dataExported });
+    } catch {
+      setDataTransferNotice({ tone: "error", message: t.dataExportError });
+    }
+  };
+
+  const installApp = async () => {
+    if (!installPromptEvent) return;
+
+    await installPromptEvent.prompt();
+    const choice = await installPromptEvent.userChoice;
+    if (choice.outcome === "accepted") {
+      setInstallPromptEvent(null);
+      setIsInstalled(true);
+    }
+  };
+
+  const onRecipeDataImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const bundle = parsePortableDataBundle(await file.text());
+      const importedRecipes = bundle.savedRecipes.map((recipe) => ({
+        ...recipe,
+        input: normalizeCalculatorInput(recipe.input)
+      }));
+      setSavedRecipes((items) => mergeSavedRecipes(items, importedRecipes));
+      setBakeLog((items) => mergeBakeLog(items, bundle.bakeLog));
+      setDataTransferNotice({
+        tone: "success",
+        message: getPortableDataImportMessage(settings.language, importedRecipes.length, bundle.bakeLog.length)
+      });
+    } catch {
+      setDataTransferNotice({ tone: "error", message: t.dataImportError });
+    } finally {
+      event.target.value = "";
+    }
+  };
+
   const copyShareText = async () => {
     const bakeTimeUnit = settings.language === "de" ? (result.oven.unit === "seconds" ? "Sek." : "Min.") : result.oven.unit;
     const lines = [
       displayRecipeName,
-      `${normalizedInput.doughBalls} x ${normalizedInput.ballWeight}g, ${result.percentages.hydration}% hydration`,
+      `${batchDescriptor}, ${result.percentages.hydration}% ${t.hydration.toLowerCase()}`,
       `${t.flour} ${result.ingredients.totalFlour}g, ${t.water} ${result.ingredients.totalWater}g, ${t.salt.toLowerCase()} ${result.ingredients.totalSalt}g, ${t.yeast.toLowerCase()} ${result.ingredients.totalYeast}g`,
       settings.language === "de"
         ? `${t.bake} ${formatTemperature(result.oven.tempF, settings.temperatureUnit)} fuer ${result.oven.minTime}-${result.oven.maxTime} ${bakeTimeUnit}`
@@ -2063,8 +2604,7 @@ export function App() {
   const printRecipe = () => window.print();
 
   const loadSavedRecipe = (recipe: SavedRecipe) => {
-    setInput(normalizeCalculatorInput(recipe.input));
-    setRecipeName(recipe.name);
+    applyCalculatorInput(recipe.input, recipe.name);
   };
 
   const onBakePhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -2109,7 +2649,7 @@ export function App() {
               </span>
             </div>
             <h1>{t.title}</h1>
-            <p>{t.subtitle}</p>
+            <p>{isBreadMode ? t.subtitleBread : t.subtitle}</p>
           </div>
         </div>
         <div className="headerActions noPrint">
@@ -2123,14 +2663,17 @@ export function App() {
           </button>
           <button className="ghostButton" type="button" onClick={() => onStyleChange(normalizedInput.styleId)}>
             <RotateCcw size={16} />
-            {t.resetStyle}
+            {isBreadMode ? t.resetProfile : t.resetStyle}
           </button>
         </div>
       </header>
 
       <section className="heroBand">
         <div className="heroText">
-          <p className="eyebrow">{activeStyle.origin}</p>
+          <div className="heroEyebrowRow">
+            <p className="eyebrow">{isBreadMode ? t.breadProduct : t.pizzaProduct}</p>
+            <span className="heroTag">{activeStyle.origin}</span>
+          </div>
           <h2>{activeStyle.name}</h2>
           <p>{activeStyle.profile}</p>
           <div className="heroMeta">
@@ -2174,96 +2717,97 @@ export function App() {
               }
             />
             {openPanels.settings ? (
-              <div className="fieldGrid compact">
-                <SelectField
-                  label={t.language}
-                  value={settings.language}
-                  onChange={(value) => updateLanguage(value as LocaleCode)}
-                >
-                  <option value="en">{t.english}</option>
-                  <option value="de">{t.german}</option>
-                </SelectField>
-                <SelectField label={t.theme} value={settings.theme} onChange={(value) => updateTheme(value as ThemeMode)}>
-                  <option value="dark">{t.dark}</option>
-                  <option value="light">{t.light}</option>
-                </SelectField>
-                <SelectField
-                  label={t.temperatureUnit}
-                  value={settings.temperatureUnit}
-                  onChange={(value) =>
-                    setSettings((current) => ({
-                      ...DEFAULT_SETTINGS,
-                      ...current,
-                      temperatureUnit: value as TemperatureUnit
-                    }))
-                  }
-                >
-                  <option value="F">{t.fahrenheit}</option>
-                  <option value="C">{t.celsius}</option>
-                </SelectField>
-                <SelectField
-                  label={t.sizeUnit}
-                  value={settings.sizeUnit}
-                  onChange={(value) => updateSizeUnit(value as SizeUnit)}
-                >
-                  <option value="in">{t.inches}</option>
-                  <option value="cm">{t.centimeters}</option>
-                </SelectField>
-              </div>
+              <SettingsPanelContent
+                language={settings.language}
+                theme={settings.theme}
+                temperatureUnit={settings.temperatureUnit}
+                sizeUnit={settings.sizeUnit}
+                workspaceMode={settings.mode}
+                productMode={settings.productMode}
+                labels={{
+                  language: t.language,
+                  english: t.english,
+                  german: t.german,
+                  theme: t.theme,
+                  dark: t.dark,
+                  light: t.light,
+                  temperatureUnit: t.temperatureUnit,
+                  fahrenheit: t.fahrenheit,
+                  celsius: t.celsius,
+                  sizeUnit: t.sizeUnit,
+                  inches: t.inches,
+                  centimeters: t.centimeters,
+                  workspaceMode: t.workspaceMode,
+                  guidedMode: t.guidedMode,
+                  studioMode: t.studioMode,
+                  workspaceHint: t.workspaceHint,
+                  productMode: t.productMode,
+                  pizzaProduct: t.pizzaProduct,
+                  breadProduct: t.breadProduct,
+                  productModeHint: t.productModeHint,
+                  appInstall: t.appInstall,
+                  appInstallHint: t.appInstallHint,
+                  installApp: t.installApp,
+                  installReady: t.installReady,
+                  installedApp: t.installedApp,
+                  installUnavailable: t.installUnavailable,
+                  offlineReady: t.offlineReady,
+                  offlinePending: t.offlinePending,
+                  offlineNow: t.offlineNow,
+                  recipeData: t.recipeData,
+                  recipeDataHint: t.recipeDataHint,
+                  exportData: t.exportData,
+                  importData: t.importData
+                }}
+                installStatus={{
+                  canInstall: installPromptEvent !== null,
+                  isInstalled,
+                  offlineReady,
+                  isOnline
+                }}
+                dataTransferNotice={dataTransferNotice}
+                exportIcon={<Download size={16} />}
+                importIcon={<Upload size={16} />}
+                onLanguageChange={updateLanguage}
+                onThemeChange={updateTheme}
+                onTemperatureUnitChange={updateTemperatureUnit}
+                onSizeUnitChange={updateSizeUnit}
+                onWorkspaceModeChange={updateWorkspaceMode}
+                onProductModeChange={updateProductMode}
+                onInstallApp={installApp}
+                onExportData={exportRecipeData}
+                onImportData={onRecipeDataImport}
+              />
             ) : null}
           </section>
 
           <section className="panel">
             <PanelTitle
               icon={<BookOpen size={18} />}
-              label={t.styles}
+              label={isBreadMode ? t.breadProfiles : t.styles}
               summary={panelSummaries.styles}
               collapsed={!openPanels.styles}
               collapseAction={renderPanelToggle("styles")}
             />
             {openPanels.styles ? (
-              <div className="styleGrid">
-                {styleGroups.map(({ parent, variants }) => {
-                  const parentActive = parent.id === normalizedInput.styleId;
-                  const variantActive = variants.some((variant) => variant.id === normalizedInput.styleId);
-                  const selectedStyleId = parentActive ? parent.id : variantActive ? normalizedInput.styleId : parent.id;
-
-                  return (
-                    <div className={parentActive || variantActive ? "styleGroupCard activeFamily" : "styleGroupCard"} key={parent.id}>
-                      <button
-                        className={parentActive ? "styleButton stylePrimaryButton active" : "styleButton stylePrimaryButton"}
-                        type="button"
-                        onClick={() => onStyleChange(parent.id)}
-                      >
-                        <strong>{parent.name}</strong>
-                        <span>{parent.flourType}</span>
-                        <small>{parent.origin}</small>
-                      </button>
-                      <div className="styleVariantFooter">
-                        {variants.length ? (
-                          <>
-                            <p className="styleVariantHeading">{t.variants}</p>
-                            <select
-                              className="styleVariantSelect"
-                              value={selectedStyleId}
-                              onChange={(event) => onStyleChange(event.target.value)}
-                            >
-                              <option value={parent.id}>{parent.name}</option>
-                              {variants.map((variant) => (
-                                <option key={variant.id} value={variant.id}>
-                                  {variant.variantLabel ?? variant.name}
-                                </option>
-                              ))}
-                            </select>
-                          </>
-                        ) : (
-                          <div className="styleVariantPlaceholder" aria-hidden="true" />
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              isBreadMode ? (
+                <BreadProfilePicker
+                  hint={t.breadModeHint}
+                  profiles={breadProfiles}
+                  value={normalizedInput.styleId}
+                  onChange={onStyleChange}
+                />
+              ) : (
+                <StylePicker
+                  groups={visibleStyleGroups}
+                  guidedHint={t.guidedStylesHint}
+                  mode={settings.mode}
+                  styleLibraryLabel={t.styleLibrary}
+                  value={normalizedInput.styleId}
+                  variantsLabel={t.variants}
+                  onChange={onStyleChange}
+                />
+              )
             ) : null}
           </section>
 
@@ -2279,16 +2823,18 @@ export function App() {
               <>
                 <div className="fieldGrid">
                   <Field
-                    label={t.doughBalls}
+                    label={batchLabels.count}
                     value={normalizedInput.doughBalls}
                     min={1}
+                    slider={doughCountSlider}
                     onChange={(value) => setPartial({ doughBalls: numberValue(value, 1) })}
                   />
                   <Field
-                    label={t.ballWeight}
+                    label={batchLabels.weight}
                     value={normalizedInput.ballWeight}
                     suffix="g"
                     min={1}
+                    slider={doughWeightSlider}
                     onChange={(value) => setPartial({ ballWeight: numberValue(value, 1) })}
                   />
                   <Field
@@ -2296,6 +2842,7 @@ export function App() {
                     value={normalizedInput.hydrationPercent}
                     suffix="%"
                     step={0.1}
+                    slider={hydrationSlider}
                     onChange={(value) => setPartial({ hydrationPercent: numberValue(value) })}
                   />
                   <Field
@@ -2303,6 +2850,7 @@ export function App() {
                     value={normalizedInput.saltPercent}
                     suffix="%"
                     step={0.1}
+                    slider={saltSlider}
                     onChange={(value) => setPartial({ saltPercent: numberValue(value) })}
                   />
                   <Field
@@ -2311,6 +2859,7 @@ export function App() {
                     suffix="%"
                     hint={getEnrichmentHint("oil", settings.language, result)}
                     step={0.1}
+                    slider={oilSlider}
                     onChange={(value) => setPartial({ oilPercent: numberValue(value) })}
                   />
                   <Field
@@ -2319,40 +2868,45 @@ export function App() {
                     suffix="%"
                     hint={getEnrichmentHint("sugar", settings.language, result)}
                     step={0.1}
+                    slider={sugarSlider}
                     onChange={(value) => setPartial({ sugarPercent: numberValue(value) })}
                   />
-                  <Field
-                    label={t.honey}
-                    value={normalizedInput.honeyPercent}
-                    suffix="%"
-                    hint={getEnrichmentHint("honey", settings.language, result)}
-                    step={0.1}
-                    onChange={(value) => setPartial({ honeyPercent: numberValue(value) })}
-                  />
-                  <Field
-                    label={t.malt}
-                    value={normalizedInput.maltPercent}
-                    suffix="%"
-                    hint={getEnrichmentHint("malt", settings.language, result)}
-                    step={0.1}
-                    onChange={(value) => setPartial({ maltPercent: numberValue(value) })}
-                  />
-                  <Field
-                    label={t.lard}
-                    value={normalizedInput.lardPercent}
-                    suffix="%"
-                    hint={getEnrichmentHint("lard", settings.language, result)}
-                    step={0.1}
-                    onChange={(value) => setPartial({ lardPercent: numberValue(value) })}
-                  />
-                  <Field
-                    label={t.milkPowder}
-                    value={normalizedInput.milkPowderPercent}
-                    suffix="%"
-                    hint={getEnrichmentHint("milk-powder", settings.language, result)}
-                    step={0.1}
-                    onChange={(value) => setPartial({ milkPowderPercent: numberValue(value) })}
-                  />
+                  {!isGuidedMode ? (
+                    <>
+                      <Field
+                        label={t.honey}
+                        value={normalizedInput.honeyPercent}
+                        suffix="%"
+                        hint={getEnrichmentHint("honey", settings.language, result)}
+                        step={0.1}
+                        onChange={(value) => setPartial({ honeyPercent: numberValue(value) })}
+                      />
+                      <Field
+                        label={t.malt}
+                        value={normalizedInput.maltPercent}
+                        suffix="%"
+                        hint={getEnrichmentHint("malt", settings.language, result)}
+                        step={0.1}
+                        onChange={(value) => setPartial({ maltPercent: numberValue(value) })}
+                      />
+                      <Field
+                        label={t.lard}
+                        value={normalizedInput.lardPercent}
+                        suffix="%"
+                        hint={getEnrichmentHint("lard", settings.language, result)}
+                        step={0.1}
+                        onChange={(value) => setPartial({ lardPercent: numberValue(value) })}
+                      />
+                      <Field
+                        label={t.milkPowder}
+                        value={normalizedInput.milkPowderPercent}
+                        suffix="%"
+                        hint={getEnrichmentHint("milk-powder", settings.language, result)}
+                        step={0.1}
+                        onChange={(value) => setPartial({ milkPowderPercent: numberValue(value) })}
+                      />
+                    </>
+                  ) : null}
                 </div>
                 <div className="fieldGrid compact">
                   <SelectField
@@ -2375,32 +2929,36 @@ export function App() {
                     <option value="planetary">Planetary</option>
                     <option value="spiral">Spiral</option>
                   </SelectField>
-                  <Field
-                    label={t.manualYeast}
-                    value={normalizedInput.manualYeastPercent ?? ""}
-                    suffix="%"
-                    step={0.01}
-                    onChange={(value) =>
-                      setPartial({ manualYeastPercent: value === "" ? undefined : numberValue(value) })
-                    }
-                  />
-                  <Field
-                    label={t.flourTemp}
-                    value={displayTemperatureValue(
-                      normalizedInput.flourTempF ?? normalizedInput.fermentation.roomTempF,
-                      settings.temperatureUnit
-                    )}
-                    suffix={`\u00B0${settings.temperatureUnit}`}
-                    onChange={(value) =>
-                      setPartial({
-                        flourTempF: parseTemperatureInput(
-                          value,
-                          settings.temperatureUnit,
-                          normalizedInput.fermentation.roomTempF
-                        )
-                      })
-                    }
-                  />
+                  {!isGuidedMode ? (
+                    <>
+                      <Field
+                        label={t.manualYeast}
+                        value={normalizedInput.manualYeastPercent ?? ""}
+                        suffix="%"
+                        step={0.01}
+                        onChange={(value) =>
+                          setPartial({ manualYeastPercent: value === "" ? undefined : numberValue(value) })
+                        }
+                      />
+                      <Field
+                        label={t.flourTemp}
+                        value={displayTemperatureValue(
+                          normalizedInput.flourTempF ?? normalizedInput.fermentation.roomTempF,
+                          settings.temperatureUnit
+                        )}
+                        suffix={`\u00B0${settings.temperatureUnit}`}
+                        onChange={(value) =>
+                          setPartial({
+                            flourTempF: parseTemperatureInput(
+                              value,
+                              settings.temperatureUnit,
+                              normalizedInput.fermentation.roomTempF
+                            )
+                          })
+                        }
+                      />
+                    </>
+                  ) : null}
                 </div>
               </>
             ) : null}
@@ -2415,276 +2973,165 @@ export function App() {
               collapseAction={renderPanelToggle("fermentation")}
             />
             {openPanels.fermentation ? (
-              <>
-                <div className="presetScroller">
-                  {presetKeys.map((key) => (
-                    <button
-                      className={preset === key ? "chip active" : "chip"}
-                      key={key}
-                      type="button"
-                      onClick={() => onPresetChange(key)}
-                    >
-                      {getPresetLabel(key, settings.language)}
-                    </button>
-                  ))}
-                </div>
-                <div className="panelMetaRow">
-                  <span className="sectionMeta">
-                    {getPresetLabel(preset, settings.language)} · {result.totalFermentationHours}h {t.totalTime.toLowerCase()}
-                  </span>
-                  <button
-                    className={`subtleDisclosure ${showFermentationDetails ? "open" : ""}`}
-                    type="button"
-                    onClick={() => setShowFermentationDetails((current) => !current)}
-                  >
-                    <span>{t.advancedSchedule}</span>
-                    <ChevronDown size={16} />
-                  </button>
-                </div>
-                {showFermentationDetails ? (
-                  <div className="fermentGrid">
-                    <FermentationStageCard
-                      {...getFermentationStageContent("bulk", settings.language)}
-                      durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
-                      temperatureLabel={t.roomTemp}
-                    >
-                      <Field
-                        label={settings.language === "de" ? "Dauer" : "Hours"}
-                        value={normalizedInput.fermentation.roomTempHours}
-                        suffix="h"
-                        step={0.5}
-                        onChange={(value) => setFermentation({ roomTempHours: numberValue(value) })}
-                      />
-                      <Field
-                        label={t.roomTemp}
-                        value={displayTemperatureValue(normalizedInput.fermentation.roomTempF, settings.temperatureUnit)}
-                        suffix={`\u00B0${settings.temperatureUnit}`}
-                        onChange={(value) =>
-                          setFermentation({
-                            roomTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.roomTempF)
-                          })
-                        }
-                      />
-                    </FermentationStageCard>
-                    <FermentationStageCard
-                      {...getFermentationStageContent("temper", settings.language)}
-                      durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
-                      temperatureLabel={t.roomTemp}
-                    >
-                      <Field
-                        label={settings.language === "de" ? "Dauer" : "Hours"}
-                        value={normalizedInput.fermentation.finalRiseHours}
-                        suffix="h"
-                        step={0.5}
-                        onChange={(value) => setFermentation({ finalRiseHours: numberValue(value) })}
-                      />
-                      <Field
-                        label={t.roomTemp}
-                        value={displayTemperatureValue(normalizedInput.fermentation.roomTempF, settings.temperatureUnit)}
-                        suffix={`\u00B0${settings.temperatureUnit}`}
-                        onChange={(value) =>
-                          setFermentation({
-                            roomTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.roomTempF)
-                          })
-                        }
-                      />
-                    </FermentationStageCard>
-                    <FermentationStageCard
-                      {...getFermentationStageContent("cold-ball", settings.language)}
-                      durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
-                      temperatureLabel={t.fridgeTemp}
-                    >
-                      <Field
-                        label={settings.language === "de" ? "Dauer" : "Hours"}
-                        value={normalizedInput.fermentation.coldBallHours}
-                        suffix="h"
-                        step={0.5}
-                        onChange={(value) => setFermentation({ coldBallHours: numberValue(value) })}
-                      />
-                      <Field
-                        label={t.fridgeTemp}
-                        value={displayTemperatureValue(normalizedInput.fermentation.fridgeTempF, settings.temperatureUnit)}
-                        suffix={`\u00B0${settings.temperatureUnit}`}
-                        onChange={(value) =>
-                          setFermentation({
-                            fridgeTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.fridgeTempF)
-                          })
-                        }
-                      />
-                    </FermentationStageCard>
-                    <FermentationStageCard
-                      {...getFermentationStageContent("cold-bulk", settings.language)}
-                      durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
-                      temperatureLabel={t.fridgeTemp}
-                    >
-                      <Field
-                        label={settings.language === "de" ? "Dauer" : "Hours"}
-                        value={normalizedInput.fermentation.coldBulkHours}
-                        suffix="h"
-                        step={0.5}
-                        onChange={(value) => setFermentation({ coldBulkHours: numberValue(value) })}
-                      />
-                      <Field
-                        label={t.fridgeTemp}
-                        value={displayTemperatureValue(normalizedInput.fermentation.fridgeTempF, settings.temperatureUnit)}
-                        suffix={`\u00B0${settings.temperatureUnit}`}
-                        onChange={(value) =>
-                          setFermentation({
-                            fridgeTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.fridgeTempF)
-                          })
-                        }
-                      />
-                    </FermentationStageCard>
-                    <FermentationStageCard
-                      {...getFermentationStageContent("cellar", settings.language)}
-                      durationLabel={settings.language === "de" ? "Stunden" : "Hours"}
-                      temperatureLabel={t.cellarTemp}
-                    >
-                      <Field
-                        label={settings.language === "de" ? "Dauer" : "Hours"}
-                        value={normalizedInput.fermentation.cellarTempHours}
-                        suffix="h"
-                        step={0.5}
-                        onChange={(value) => setFermentation({ cellarTempHours: numberValue(value) })}
-                      />
-                      <Field
-                        label={t.cellarTemp}
-                        value={displayTemperatureValue(normalizedInput.fermentation.cellarTempF, settings.temperatureUnit)}
-                        suffix={`\u00B0${settings.temperatureUnit}`}
-                        onChange={(value) =>
-                          setFermentation({
-                            cellarTempF: parseTemperatureInput(value, settings.temperatureUnit, normalizedInput.fermentation.cellarTempF)
-                          })
-                        }
-                      />
-                    </FermentationStageCard>
-                  </div>
-                ) : null}
-              </>
+              <FermentationPanelContent
+                locale={settings.language}
+                temperatureUnit={settings.temperatureUnit}
+                presetKeys={presetKeys}
+                preset={preset}
+                totalFermentationHours={result.totalFermentationHours}
+                showFermentationDetails={showFermentationDetails}
+                fermentation={normalizedInput.fermentation}
+                labels={{
+                  totalTime: t.totalTime,
+                  advancedSchedule: t.advancedSchedule,
+                  roomTemp: t.roomTemp,
+                  cellarTemp: t.cellarTemp,
+                  fridgeTemp: t.fridgeTemp,
+                  roomHumidity: t.roomHumidity,
+                  cellarHumidity: t.cellarHumidity,
+                  fridgeHumidity: t.fridgeHumidity
+                }}
+                onPresetChange={onPresetChange}
+                onToggleDetails={() => setShowFermentationDetails((current) => !current)}
+                onFermentationChange={setFermentation}
+                getPresetLabel={(key) => getPresetLabel(key, settings.language)}
+              />
             ) : null}
           </section>
 
-          <section className="panel">
-            <PanelTitle
-              icon={<FlaskConical size={18} />}
-              label={t.doughStudio}
-              summary={panelSummaries.doughStudio}
-              collapsed={!openPanels.doughStudio}
-              collapseAction={renderPanelToggle("doughStudio")}
-            />
-            {openPanels.doughStudio ? (
-              <>
-                <div className="fieldGrid compact">
-                  <SelectField
-                    label={t.prefermentMode}
-                    value={prefermentMode}
-                    onChange={(value) => setPreferment(getPrefermentPatch(value as PrefermentMode))}
-                  >
-                    <option value="none">{t.none}</option>
-                    <option value="poolish">{t.poolish}</option>
-                    <option value="biga">{t.biga}</option>
-                    <option value="tiga">{t.tiga}</option>
-                    <option value="bassinage">{t.bassinage}</option>
-                  </SelectField>
-                  <Toggle
-                    checked={normalizedInput.flourBlendEnabled}
-                    label={t.flourBlend}
-                    hint={result.flourBlend.description}
-                    onChange={(checked) => setPartial({ flourBlendEnabled: checked })}
-                  />
-                </div>
-
-                {prefermentMode !== "none" ? (
-                  <div className="fieldGrid">
-                    <Field
-                      label={`${t.prefermentFlour} (${prefermentFlourGrams}g)`}
-                      value={normalizedInput.preferment.flourPercent}
-                      suffix="%"
-                      min={0}
-                      max={100}
-                      onChange={(value) => setPreferment({ flourPercent: numberValue(value, 30) })}
+          {!isGuidedMode ? (
+            <section className="panel">
+              <PanelTitle
+                icon={<FlaskConical size={18} />}
+                label={t.doughStudio}
+                summary={panelSummaries.doughStudio}
+                collapsed={!openPanels.doughStudio}
+                collapseAction={renderPanelToggle("doughStudio")}
+              />
+              {openPanels.doughStudio ? (
+                <>
+                  <div className="fieldGrid compact">
+                    <SelectField
+                      label={t.prefermentMode}
+                      value={prefermentMode}
+                      onChange={(value) => setPreferment(getPrefermentPatch(value as PrefermentMode))}
+                    >
+                      <option value="none">{t.none}</option>
+                      <option value="poolish">{t.poolish}</option>
+                      <option value="biga">{t.biga}</option>
+                      <option value="tiga">{t.tiga}</option>
+                      <option value="bassinage">{t.bassinage}</option>
+                    </SelectField>
+                    <Toggle
+                      checked={normalizedInput.flourBlendEnabled}
+                      label={t.flourBlend}
+                      hint={result.flourBlend.description}
+                      onChange={(checked) => setPartial({ flourBlendEnabled: checked })}
                     />
-                    <Field
-                      label={t.bigaHydration}
-                      value={normalizedInput.preferment.bigaHydration}
-                      suffix="%"
-                      onChange={(value) => setPreferment({ bigaHydration: numberValue(value, 55) })}
-                    />
-                    <Field
-                      label={t.prefermentRoom}
-                      value={normalizedInput.preferment.roomHours}
-                      suffix="h"
-                      onChange={(value) => setPreferment({ roomHours: numberValue(value, 12) })}
-                    />
-                    <Field
-                      label={t.prefermentCold}
-                      value={normalizedInput.preferment.coldHours}
-                      suffix="h"
-                      onChange={(value) => setPreferment({ coldHours: numberValue(value) })}
-                    />
-                    <p className="sectionMeta fieldMeta">
-                      {normalizedInput.preferment.flourPercent}% = {prefermentFlourGrams}g {t.flour.toLowerCase()} {t.inPreferment}
-                    </p>
-                    <p className="sectionMeta fieldMeta">
-                      {t.mainDoughAdditions}: {mainDoughFlourGrams}g {t.additionalFlour}, {mainDoughWaterGrams}g {t.additionalWater},{" "}
-                      {mainDoughYeastGrams}g {t.additionalYeast}
-                    </p>
                   </div>
-                ) : null}
 
-                {normalizedInput.flourBlendEnabled ? (
-                  <div className="blendList">
-                    <p className="sectionMeta">
-                      {t.blendTotal}: {blendTotal}%
-                    </p>
-                    {normalizedInput.flourBlend.map((item, index) => {
-                      const breakdown = blendBreakdown[index];
+                  {prefermentMode !== "none" ? (
+                    <div className="fieldGrid">
+                      <Field
+                        label={`${t.prefermentFlour} (${prefermentFlourGrams}g)`}
+                        value={normalizedInput.preferment.flourPercent}
+                        suffix="%"
+                        min={0}
+                        max={100}
+                        onChange={(value) => setPreferment({ flourPercent: numberValue(value, 30) })}
+                      />
+                      <Field
+                        label={t.bigaHydration}
+                        value={normalizedInput.preferment.bigaHydration}
+                        suffix="%"
+                        onChange={(value) => setPreferment({ bigaHydration: numberValue(value, 55) })}
+                      />
+                      <Field
+                        label={t.prefermentRoom}
+                        value={normalizedInput.preferment.roomHours}
+                        suffix="h"
+                        onChange={(value) => setPreferment({ roomHours: numberValue(value, 12) })}
+                      />
+                      <Field
+                        label={t.prefermentCold}
+                        value={normalizedInput.preferment.coldHours}
+                        suffix="h"
+                        onChange={(value) => setPreferment({ coldHours: numberValue(value) })}
+                      />
+                      <p className="sectionMeta fieldMeta">
+                        {normalizedInput.preferment.flourPercent}% = {prefermentFlourGrams}g {t.flour.toLowerCase()} {t.inPreferment}
+                      </p>
+                      <p className="sectionMeta fieldMeta">
+                        {t.mainDoughAdditions}: {mainDoughFlourGrams}g {t.additionalFlour}, {mainDoughWaterGrams}g {t.additionalWater},{" "}
+                        {mainDoughYeastGrams}g {t.additionalYeast}
+                      </p>
+                    </div>
+                  ) : null}
 
-                      return (
-                      <div className="blendRow" key={`${item.flourId}-${index}`}>
-                        <select value={item.flourId} onChange={(event) => setBlendItem(index, { flourId: event.target.value })}>
-                          {FLOURS.map((flour) => (
-                            <option key={flour.id} value={flour.id}>
-                              {flour.brand} {flour.name}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          type="number"
-                          value={item.percentage}
-                          min={0}
-                          max={100}
-                          onChange={(event) => setBlendItem(index, { percentage: numberValue(event.target.value) })}
-                        />
-                        <button
-                          className="iconButton"
-                          type="button"
-                          onClick={() => removeBlendItem(index)}
-                          aria-label="Remove flour"
-                        >
-                          x
-                        </button>
-                        {breakdown ? (
-                          <p className="sectionMeta blendMeta">
-                            {breakdown.totalGrams}g {t.totalLabel}
-                            {prefermentMode !== "none"
-                              ? `, ${breakdown.prefermentGrams}g ${prefermentName}, ${breakdown.mainDoughGrams}g ${t.mainDoughAdditions.toLowerCase()}`
-                              : ""}
-                          </p>
-                        ) : null}
-                      </div>
-                      );
-                    })}
-                    <button className="ghostButton" type="button" onClick={addBlendItem}>
-                      {t.addFlour}
-                    </button>
-                  </div>
-                ) : null}
-              </>
-            ) : null}
-          </section>
+                  {normalizedInput.flourBlendEnabled ? (
+                    <div className="blendList">
+                      <p className="sectionMeta">
+                        {t.blendTotal}: {blendTotal}%
+                      </p>
+                      {normalizedInput.flourBlend.map((item, index) => {
+                        const breakdown = blendBreakdown[index];
+                        const flourSelectLabel = `${t.flour} ${index + 1}`;
+                        const flourPercentLabel = `${t.flourBlend} % ${index + 1}`;
 
-          <section className="panel">
+                        return (
+                          <div className="blendRow" key={`${item.flourId}-${index}`}>
+                            <select
+                              aria-label={flourSelectLabel}
+                              title={flourSelectLabel}
+                              value={item.flourId}
+                              onChange={(event) => setBlendItem(index, { flourId: event.target.value })}
+                            >
+                              {FLOURS.map((flour) => (
+                                <option key={flour.id} value={flour.id}>
+                                  {flour.brand} {flour.name}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              aria-label={flourPercentLabel}
+                              title={flourPercentLabel}
+                              type="number"
+                              value={item.percentage}
+                              min={0}
+                              max={100}
+                              onChange={(event) => setBlendItem(index, { percentage: numberValue(event.target.value) })}
+                            />
+                            <button
+                              className="iconButton"
+                              type="button"
+                              onClick={() => removeBlendItem(index)}
+                              aria-label="Remove flour"
+                            >
+                              x
+                            </button>
+                            {breakdown ? (
+                              <p className="sectionMeta blendMeta">
+                                {breakdown.totalGrams}g {t.totalLabel}
+                                {prefermentMode !== "none"
+                                  ? `, ${breakdown.prefermentGrams}g ${prefermentName}, ${breakdown.mainDoughGrams}g ${t.mainDoughAdditions.toLowerCase()}`
+                                  : ""}
+                              </p>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                      <button className="ghostButton" type="button" onClick={addBlendItem}>
+                        {t.addFlour}
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+            </section>
+          ) : null}
+
+          {!isBreadMode ? (
+            <section className="panel">
             <PanelTitle
               icon={<BookOpen size={18} />}
               label={t.sauce}
@@ -2711,6 +3158,7 @@ export function App() {
                         suffix="g"
                         step={5}
                         min={0}
+                        slider={createMobileSlider(0, 180, 5)}
                         onChange={(value) => setSauce({ gramsPerPizza: numberValue(value, 90) })}
                       />
                       {!selectedSauceCollection ? (
@@ -2824,7 +3272,8 @@ export function App() {
                 ) : null}
               </>
             ) : null}
-          </section>
+            </section>
+          ) : null}
 
           <section className="panel">
             <PanelTitle
@@ -2877,6 +3326,12 @@ export function App() {
                   <button className="actionButton alignEnd" type="button" onClick={applyPanWeight}>
                     {t.applyPanWeight}
                   </button>
+                  {tinLoaf ? <Notice tone="notice">{t.tinLoafHint}</Notice> : null}
+                </div>
+              ) : loafWorkflow ? (
+                <div className="sizePanel">
+                  <p>{t.freeformLoafHint}</p>
+                  <Notice tone="notice">{formatBakeWindow(result.oven, settings.language, settings.temperatureUnit, ovenDetail)}</Notice>
                 </div>
               ) : (
                 <div className="sizePanel">
@@ -2995,31 +3450,23 @@ export function App() {
               }
             />
             {openPanels.planner ? (
-              <>
-                <Segmented
-                  value={planMode}
-                  options={[
-                    { value: "starting-now", label: t.today },
-                    { value: "ready-by", label: t.readyBy }
-                  ]}
-                  onChange={(value) => setPlanMode(value)}
-                />
-                {planMode === "ready-by" ? (
-                  <label className="field single">
-                    <span>{t.readyDate}</span>
-                    <input type="datetime-local" value={readyBy} onChange={(event) => setReadyBy(event.target.value)} />
-                  </label>
-                ) : null}
-                <ol className="timeline">
-                  {localizedPlan.map((step) => (
-                    <li key={`${step.label}-${step.time.toISOString()}`}>
-                      <time>{formatDateTime(step.time.toISOString(), settings.language)}</time>
-                      <strong>{step.label}</strong>
-                      <span>{step.description}</span>
-                    </li>
-                  ))}
-                </ol>
-              </>
+              <PlannerPanelContent
+                bakeLabel={t.bake}
+                planMode={planMode}
+                readyByLabel={t.readyBy}
+                readyByValue={readyBy}
+                readyDateLabel={t.readyDate}
+                readyNowLabel={t.today}
+                quickScheduleLabel={t.quickSchedule}
+                quickScheduleHint={t.quickScheduleHint}
+                startLabel={t.startAt}
+                startValue={planStartValue}
+                bakeValue={planBakeValue}
+                shortcuts={plannerShortcuts}
+                timeline={timelineItems}
+                onPlanModeChange={setPlanMode}
+                onReadyByChange={setReadyBy}
+              />
             ) : null}
           </section>
         </div>
@@ -3034,141 +3481,109 @@ export function App() {
               collapseAction={renderPanelToggle("formula")}
             />
             {openPanels.formula ? (
-              <>
-                <div className="recipeHeader">
-                  <div>
-                    <p className="eyebrow">{activeStyle.origin}</p>
-                    <h3>{displayRecipeName}</h3>
-                    <p className="sectionMeta">{activeStyle.flourType}</p>
-                  </div>
-                  <div className="buttonRow noPrint">
-                    <button className="ghostButton" type="button" onClick={copyShareText}>
-                      <Share2 size={16} />
-                      {t.copy}
-                    </button>
-                    <button className="ghostButton" type="button" onClick={exportRecipe}>
-                      <Download size={16} />
-                      {t.export}
-                    </button>
-                    <button className="ghostButton" type="button" onClick={printRecipe}>
-                      <Printer size={16} />
-                      {t.print}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="ingredientTable">
-                  <Ingredient label={t.flour} value={`${result.ingredients.totalFlour}g`} pct="100%" />
-                  <Ingredient
-                    label={t.water}
-                    value={`${result.ingredients.totalWater}g`}
-                    pct={`${result.percentages.hydration}%`}
-                    status={styleRange(result, "hydration", normalizedInput.hydrationPercent)}
-                  />
-                  <Ingredient
-                    label={t.salt}
-                    value={`${result.ingredients.totalSalt}g`}
-                    pct={`${result.percentages.salt}%`}
-                    status={styleRange(result, "salt", normalizedInput.saltPercent)}
-                  />
-                  <Ingredient label={t.yeast} value={`${result.ingredients.totalYeast}g`} pct={`${result.percentages.yeast}%`} />
-                  {result.ingredients.totalOil > 0 ? (
-                    <Ingredient
-                      label={t.oil}
-                      value={`${result.ingredients.totalOil}g`}
-                      pct={`${result.percentages.oil}%`}
-                      status={styleRange(result, "oil", normalizedInput.oilPercent)}
-                    />
-                  ) : null}
-                  {result.ingredients.totalSugar > 0 ? (
-                    <Ingredient
-                      label={t.sugar}
-                      value={`${result.ingredients.totalSugar}g`}
-                      pct={`${result.percentages.sugar}%`}
-                      status={styleRange(result, "sugar", normalizedInput.sugarPercent)}
-                    />
-                  ) : null}
-                  {result.ingredients.totalHoney > 0 ? (
-                    <Ingredient label={t.honey} value={`${result.ingredients.totalHoney}g`} pct={`${result.percentages.honey}%`} />
-                  ) : null}
-                  {result.ingredients.totalMalt > 0 ? (
-                    <Ingredient label={t.malt} value={`${result.ingredients.totalMalt}g`} pct={`${result.percentages.malt}%`} />
-                  ) : null}
-                  {result.ingredients.totalLard > 0 ? (
-                    <Ingredient label={t.lard} value={`${result.ingredients.totalLard}g`} pct={`${result.percentages.lard}%`} />
-                  ) : null}
-                  {result.ingredients.totalMilkPowder > 0 ? (
-                    <Ingredient
-                      label={t.milkPowder}
-                      value={`${result.ingredients.totalMilkPowder}g`}
-                      pct={`${result.percentages.milkPowder}%`}
-                    />
-                  ) : null}
-                </div>
-
-                <div className="summaryGrid">
-                  <Metric label={t.doughBalls} value={`${normalizedInput.doughBalls}`} />
-                  <Metric label={t.ballWeight} value={`${normalizedInput.ballWeight}g`} />
-                  <Metric label={t.waterTemp} value={formatTemperature(result.waterTemperature.waterTempF, settings.temperatureUnit)} />
-                  <Metric label={t.bake} value={formatTemperature(result.oven.tempF, settings.temperatureUnit)} />
-                </div>
-
-                <div className="splitBox">
-                  <strong>{waterSummary.title}</strong>
-                  <span>{waterSummary.useText}</span>
-                  <span>{waterSummary.targetText}</span>
-                  {result.waterTemperature.note ? (
-                    <span>{localizeWaterMessage(result.waterTemperature.note, settings.language)}</span>
-                  ) : null}
-                </div>
-
-                {prefermentMode !== "none" ? (
-                  <div className="splitBox">
-                    <strong>{t.prefermentSplit}</strong>
-                    <span>
-                      {prefermentName}: {normalizedInput.preferment.flourPercent}% = {prefermentFlourGrams}g {t.flour.toLowerCase()}, {result.ingredients.prefermentWater}g{" "}
-                      {t.water.toLowerCase()}, {result.ingredients.prefermentYeast}g {t.yeast.toLowerCase()}
-                    </span>
-                    <span>
-                      {t.mainDoughAdditions}: {mainDoughFlourGrams}g {t.additionalFlour}, {mainDoughWaterGrams}g {t.additionalWater},{" "}
-                      {mainDoughYeastGrams}g {t.additionalYeast}
-                    </span>
-                  </div>
-                ) : null}
-
-                {normalizedInput.flourBlendEnabled ? (
-                  <div className="splitBox">
-                    <strong>{t.flourBlend}</strong>
-                    {blendBreakdown.map((item) => (
-                      <span key={`${item.flourId}-recipe`}>
-                        {item.flourLabel}: {item.totalGrams}g {t.totalLabel}
-                        {prefermentMode !== "none"
-                          ? `, ${item.prefermentGrams}g ${prefermentName}, ${item.mainDoughGrams}g ${t.mainDoughAdditions.toLowerCase()}`
-                          : ""}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-
-                {result.sauce ? (
-                  <div className="splitBox">
-                    <strong>{t.sauce}</strong>
-                    <span>
-                      {localizedSelectedSauceOption?.name ?? result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, t)}: {result.sauce.perPizzaGrams}g / {settings.language === "de" ? "Pizza" : "pizza"}
-                    </span>
-                    <span>
-                      {settings.language === "de"
-                        ? `${result.sauce.totalGrams}g gesamt fuer den Batch`
-                        : `${result.sauce.totalGrams}g total for the batch`}
-                    </span>
-                    {localizedSelectedSauceOption?.source ? (
-                      <span>
-                        {sauceUi.source}: {localizedSelectedSauceOption.source}
-                      </span>
-                    ) : null}
-                  </div>
-                ) : null}
-              </>
+              <RecipeSheetPanelContent
+                origin={activeStyle.origin}
+                title={displayRecipeName}
+                flourType={activeStyle.flourType}
+                labels={{
+                  copy: t.copy,
+                  export: t.export,
+                  print: t.print
+                }}
+                ingredients={[
+                  { label: t.flour, value: `${result.ingredients.totalFlour}g`, pct: "100%" },
+                  {
+                    label: t.water,
+                    value: `${result.ingredients.totalWater}g`,
+                    pct: `${result.percentages.hydration}%`,
+                    status: styleRange(result, "hydration", normalizedInput.hydrationPercent)
+                  },
+                  {
+                    label: t.salt,
+                    value: `${result.ingredients.totalSalt}g`,
+                    pct: `${result.percentages.salt}%`,
+                    status: styleRange(result, "salt", normalizedInput.saltPercent)
+                  },
+                  { label: t.yeast, value: `${result.ingredients.totalYeast}g`, pct: `${result.percentages.yeast}%` },
+                  ...(result.ingredients.totalOil > 0
+                    ? [{
+                        label: t.oil,
+                        value: `${result.ingredients.totalOil}g`,
+                        pct: `${result.percentages.oil}%`,
+                        status: styleRange(result, "oil", normalizedInput.oilPercent)
+                      }]
+                    : []),
+                  ...(result.ingredients.totalSugar > 0
+                    ? [{
+                        label: t.sugar,
+                        value: `${result.ingredients.totalSugar}g`,
+                        pct: `${result.percentages.sugar}%`,
+                        status: styleRange(result, "sugar", normalizedInput.sugarPercent)
+                      }]
+                    : []),
+                  ...(result.ingredients.totalHoney > 0 ? [{ label: t.honey, value: `${result.ingredients.totalHoney}g`, pct: `${result.percentages.honey}%` }] : []),
+                  ...(result.ingredients.totalMalt > 0 ? [{ label: t.malt, value: `${result.ingredients.totalMalt}g`, pct: `${result.percentages.malt}%` }] : []),
+                  ...(result.ingredients.totalLard > 0 ? [{ label: t.lard, value: `${result.ingredients.totalLard}g`, pct: `${result.percentages.lard}%` }] : []),
+                  ...(result.ingredients.totalMilkPowder > 0
+                    ? [{ label: t.milkPowder, value: `${result.ingredients.totalMilkPowder}g`, pct: `${result.percentages.milkPowder}%` }]
+                    : [])
+                ]}
+                metrics={[
+                  { label: batchLabels.count, value: `${normalizedInput.doughBalls}` },
+                  { label: batchLabels.weight, value: `${normalizedInput.ballWeight}g` },
+                  { label: t.waterTemp, value: formatTemperature(result.waterTemperature.waterTempF, settings.temperatureUnit) },
+                  { label: t.bake, value: formatTemperature(result.oven.tempF, settings.temperatureUnit) }
+                ]}
+                waterSummary={{
+                  title: waterSummary.title,
+                  useText: waterSummary.useText,
+                  targetText: waterSummary.targetText,
+                  noteText: result.waterTemperature.note ? localizeWaterMessage(result.waterTemperature.note, settings.language) : undefined
+                }}
+                prefermentSummary={
+                  prefermentMode !== "none"
+                    ? {
+                        title: t.prefermentSplit,
+                        lines: [
+                          `${prefermentName}: ${normalizedInput.preferment.flourPercent}% = ${prefermentFlourGrams}g ${t.flour.toLowerCase()}, ${result.ingredients.prefermentWater}g ${t.water.toLowerCase()}, ${result.ingredients.prefermentYeast}g ${t.yeast.toLowerCase()}`,
+                          `${t.mainDoughAdditions}: ${mainDoughFlourGrams}g ${t.additionalFlour}, ${mainDoughWaterGrams}g ${t.additionalWater}, ${mainDoughYeastGrams}g ${t.additionalYeast}`
+                        ]
+                      }
+                    : undefined
+                }
+                flourBlendSummary={
+                  normalizedInput.flourBlendEnabled
+                    ? {
+                        title: t.flourBlend,
+                        lines: blendBreakdown.map(
+                          (item) =>
+                            `${item.flourLabel}: ${item.totalGrams}g ${t.totalLabel}${
+                              prefermentMode !== "none"
+                                ? `, ${item.prefermentGrams}g ${prefermentName}, ${item.mainDoughGrams}g ${t.mainDoughAdditions.toLowerCase()}`
+                                : ""
+                            }`
+                        )
+                      }
+                    : undefined
+                }
+                sauceSummary={
+                  result.sauce
+                    ? {
+                        title: t.sauce,
+                        lines: [
+                          `${localizedSelectedSauceOption?.name ?? result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, t)}: ${result.sauce.perPizzaGrams}g / ${settings.language === "de" ? "Pizza" : "pizza"}`,
+                          settings.language === "de"
+                            ? `${result.sauce.totalGrams}g gesamt fuer den Batch`
+                            : `${result.sauce.totalGrams}g total for the batch`,
+                          ...(localizedSelectedSauceOption?.source ? [`${sauceUi.source}: ${localizedSelectedSauceOption.source}`] : [])
+                        ]
+                      }
+                    : undefined
+                }
+                onCopy={copyShareText}
+                onExport={exportRecipe}
+                onPrint={printRecipe}
+              />
             ) : null}
           </section>
 
@@ -3274,197 +3689,202 @@ export function App() {
             ) : null}
           </section>
 
-          <section className="panel noPrint">
-            <PanelTitle
-              icon={<Calculator size={18} />}
-              label={t.cost}
-              summary={panelSummaries.cost}
-              collapsed={!openPanels.cost}
-              collapseAction={
-                <button
-                  className={`iconButton panelToggle ${openPanels.cost ? "open" : ""}`}
-                  type="button"
-                  aria-label={openPanels.cost ? t.collapseSection : t.expandSection}
-                  title={openPanels.cost ? t.collapseSection : t.expandSection}
-                  onClick={() => togglePanel("cost")}
-                >
-                  <ChevronDown size={16} />
-                </button>
-              }
-            />
-            {openPanels.cost ? (
-              <>
-                <div className="fieldGrid">
-                  <Field
-                    label={t.flourCost}
-                    value={resolvedCostSettings.flourPerKg}
-                    step={0.1}
-                    onChange={(value) => setCostSettings((current) => ({ ...current, flourPerKg: numberValue(value) }))}
-                  />
-                  <Field
-                    label={t.yeastCost}
-                    value={resolvedCostSettings.yeastPerKg}
-                    step={0.1}
-                    onChange={(value) => setCostSettings((current) => ({ ...current, yeastPerKg: numberValue(value) }))}
-                  />
-                  <Field
-                    label={t.oilCost}
-                    value={resolvedCostSettings.oilPerKg}
-                    step={0.1}
-                    onChange={(value) => setCostSettings((current) => ({ ...current, oilPerKg: numberValue(value) }))}
-                  />
-                  <SelectField
-                    label={t.currency}
-                    value={resolvedCostSettings.currency}
-                    onChange={(value) => setCostSettings((current) => ({ ...current, currency: value }))}
-                  >
-                    <option value="USD">USD</option>
-                    <option value="EUR">EUR</option>
-                    <option value="GBP">GBP</option>
-                    <option value="CAD">CAD</option>
-                  </SelectField>
-                </div>
-                <div className="costTotal">
-                  <span>{t.batch}</span>
-                  <strong>{formatMoney(cost.total, cost.currency, settings.language)}</strong>
-                  <span>{t.perDough}</span>
-                  <strong>{formatMoney(cost.perBall, cost.currency, settings.language)}</strong>
-                </div>
-              </>
-            ) : null}
-          </section>
-
-          <section className="panel noPrint">
-            <PanelTitle
-              icon={<Save size={18} />}
-              label={t.savedRecipes}
-              summary={panelSummaries.saved}
-              collapsed={!openPanels.saved}
-              collapseAction={
-                <button
-                  className={`iconButton panelToggle ${openPanels.saved ? "open" : ""}`}
-                  type="button"
-                  aria-label={openPanels.saved ? t.collapseSection : t.expandSection}
-                  title={openPanels.saved ? t.collapseSection : t.expandSection}
-                  onClick={() => togglePanel("saved")}
-                >
-                  <ChevronDown size={16} />
-                </button>
-              }
-            />
-            {openPanels.saved ? (
-              <>
-                <div className="saveRow">
-                  <input value={recipeName} onChange={(event) => setRecipeName(event.target.value)} placeholder={t.recipeName} />
-                  <button className="actionButton" type="button" onClick={saveRecipe}>
-                    <Save size={16} />
-                    {t.save}
-                  </button>
-                </div>
-                <p className="sectionMeta">
-                  {savedRecipes.length} {t.savedCount}
-                </p>
-                <div className="savedList scrollArea">
-                  {savedRecipes.map((recipe) => (
-                    <button className="savedItem" key={recipe.id} type="button" onClick={() => loadSavedRecipe(recipe)}>
-                      <strong>{recipe.name}</strong>
-                      <span>{formatDateTime(recipe.createdAt, settings.language)}</span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            ) : null}
-          </section>
-
-          <section className="panel noPrint">
-            <PanelTitle
-              icon={<ClipboardList size={18} />}
-              label={t.bakeJournal}
-              summary={panelSummaries.journal}
-              collapsed={!openPanels.journal}
-              collapseAction={
-                <button
-                  className={`iconButton panelToggle ${openPanels.journal ? "open" : ""}`}
-                  type="button"
-                  aria-label={openPanels.journal ? t.collapseSection : t.expandSection}
-                  title={openPanels.journal ? t.collapseSection : t.expandSection}
-                  onClick={() => togglePanel("journal")}
-                >
-                  <ChevronDown size={16} />
-                </button>
-              }
-            />
-            {openPanels.journal ? (
-              <>
-                <div className="fieldGrid compact">
-                  <Field
-                    label={t.rating}
-                    value={logDraft.rating}
-                    min={1}
-                    max={5}
-                    onChange={(value) => setLogDraft((current) => ({ ...current, rating: numberValue(value, 5) }))}
-                  />
-                  <SelectField
-                    label={t.outcome}
-                    value={logDraft.outcome}
-                    onChange={(value) => setLogDraft((current) => ({ ...current, outcome: value as BakeLogEntry["outcome"] }))}
-                  >
-                    <option value="keeper">{t.keeper}</option>
-                    <option value="tweak">{t.tweak}</option>
-                    <option value="fail">{t.fail}</option>
-                  </SelectField>
-                </div>
-                <div className="photoRow">
-                  <label className="ghostButton fileButton">
-                    <input type="file" accept="image/*" onChange={onBakePhotoChange} />
-                    {t.addPhoto}
-                  </label>
-                  {logDraft.photoDataUrl ? (
+          {!isGuidedMode ? (
+            <>
+              <section className="panel noPrint">
+                <PanelTitle
+                  icon={<Calculator size={18} />}
+                  label={t.cost}
+                  summary={panelSummaries.cost}
+                  collapsed={!openPanels.cost}
+                  collapseAction={
                     <button
-                      className="ghostButton"
+                      className={`iconButton panelToggle ${openPanels.cost ? "open" : ""}`}
                       type="button"
-                      onClick={() => setLogDraft((current) => ({ ...current, photoDataUrl: undefined, photoName: undefined }))}
+                      aria-label={openPanels.cost ? t.collapseSection : t.expandSection}
+                      title={openPanels.cost ? t.collapseSection : t.expandSection}
+                      onClick={() => togglePanel("cost")}
                     >
-                      {t.removePhoto}
+                      <ChevronDown size={16} />
                     </button>
-                  ) : null}
-                </div>
-                {logDraft.photoDataUrl ? (
-                  <div className="photoPreview">
-                    <img src={logDraft.photoDataUrl} alt={logDraft.photoName ?? "Bake preview"} />
-                    <span>{logDraft.photoName}</span>
-                  </div>
-                ) : (
-                  <p className="sectionMeta">{t.noPhoto}</p>
-                )}
-                <textarea
-                  value={logDraft.notes}
-                  onChange={(event) => setLogDraft((current) => ({ ...current, notes: event.target.value }))}
-                  placeholder={t.notesPlaceholder}
+                  }
                 />
-                <button className="actionButton fullWidth" type="button" onClick={addBakeLog}>
-                  {t.logBake}
-                </button>
-                <p className="sectionMeta">
-                  {bakeLog.length} {t.journalCount}
-                </p>
-                <div className="savedList scrollArea">
-                  {bakeLog.map((entry) => (
-                    <div className="savedItem staticItem" key={entry.id}>
-                      <strong>{entry.recipeName}</strong>
-                      <span>
-                        {entry.rating}/5, {t[entry.outcome]}, {formatDateTime(entry.date, settings.language)}
-                      </span>
-                      {entry.photoDataUrl ? (
-                        <img className="journalImage" src={entry.photoDataUrl} alt={entry.photoName ?? entry.recipeName} />
-                      ) : null}
-                      {entry.notes ? <p>{entry.notes}</p> : null}
+                {openPanels.cost ? (
+                  <>
+                    <div className="fieldGrid">
+                      <Field
+                        label={t.flourCost}
+                        value={resolvedCostSettings.flourPerKg}
+                        step={0.1}
+                        onChange={(value) => setCostSettings((current) => ({ ...current, flourPerKg: numberValue(value) }))}
+                      />
+                      <Field
+                        label={t.yeastCost}
+                        value={resolvedCostSettings.yeastPerKg}
+                        step={0.1}
+                        onChange={(value) => setCostSettings((current) => ({ ...current, yeastPerKg: numberValue(value) }))}
+                      />
+                      <Field
+                        label={t.oilCost}
+                        value={resolvedCostSettings.oilPerKg}
+                        step={0.1}
+                        onChange={(value) => setCostSettings((current) => ({ ...current, oilPerKg: numberValue(value) }))}
+                      />
+                      <SelectField
+                        label={t.currency}
+                        value={resolvedCostSettings.currency}
+                        onChange={(value) => setCostSettings((current) => ({ ...current, currency: value }))}
+                      >
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                        <option value="GBP">GBP</option>
+                        <option value="CAD">CAD</option>
+                      </SelectField>
                     </div>
-                  ))}
-                </div>
-              </>
-            ) : null}
-          </section>
+                    <div className="costTotal">
+                      <span>{t.batch}</span>
+                      <strong>{formatMoney(cost.total, cost.currency, settings.language)}</strong>
+                      <span>{batchLabels.perUnit}</span>
+                      <strong>{formatMoney(cost.perBall, cost.currency, settings.language)}</strong>
+                    </div>
+                  </>
+                ) : null}
+              </section>
+
+              <section className="panel noPrint">
+                <PanelTitle
+                  icon={<Save size={18} />}
+                  label={t.savedRecipes}
+                  summary={panelSummaries.saved}
+                  collapsed={!openPanels.saved}
+                  collapseAction={
+                    <button
+                      className={`iconButton panelToggle ${openPanels.saved ? "open" : ""}`}
+                      type="button"
+                      aria-label={openPanels.saved ? t.collapseSection : t.expandSection}
+                      title={openPanels.saved ? t.collapseSection : t.expandSection}
+                      onClick={() => togglePanel("saved")}
+                    >
+                      <ChevronDown size={16} />
+                    </button>
+                  }
+                />
+                {openPanels.saved ? (
+                  <>
+                    <div className="saveRow">
+                      <input value={recipeName} onChange={(event) => setRecipeName(event.target.value)} placeholder={t.recipeName} />
+                      <button className="actionButton" type="button" onClick={saveRecipe}>
+                        <Save size={16} />
+                        {t.save}
+                      </button>
+                    </div>
+                    <p className="sectionMeta">
+                      {savedRecipes.length} {t.savedCount}
+                    </p>
+                    <div className="savedList scrollArea">
+                      {savedRecipes.map((recipe) => (
+                        <button className="savedItem" key={recipe.id} type="button" onClick={() => loadSavedRecipe(recipe)}>
+                          <strong>{recipe.name}</strong>
+                          <span>{formatDateTime(recipe.createdAt, settings.language)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+              </section>
+
+              <section className="panel noPrint">
+                <PanelTitle
+                  icon={<ClipboardList size={18} />}
+                  label={t.bakeJournal}
+                  summary={panelSummaries.journal}
+                  collapsed={!openPanels.journal}
+                  collapseAction={
+                    <button
+                      className={`iconButton panelToggle ${openPanels.journal ? "open" : ""}`}
+                      type="button"
+                      aria-label={openPanels.journal ? t.collapseSection : t.expandSection}
+                      title={openPanels.journal ? t.collapseSection : t.expandSection}
+                      onClick={() => togglePanel("journal")}
+                    >
+                      <ChevronDown size={16} />
+                    </button>
+                  }
+                />
+                {openPanels.journal ? (
+                  <>
+                    <div className="fieldGrid compact">
+                      <Field
+                        label={t.rating}
+                        value={logDraft.rating}
+                        min={1}
+                        max={5}
+                        slider={createMobileSlider(1, 5, 1)}
+                        onChange={(value) => setLogDraft((current) => ({ ...current, rating: numberValue(value, 5) }))}
+                      />
+                      <SelectField
+                        label={t.outcome}
+                        value={logDraft.outcome}
+                        onChange={(value) => setLogDraft((current) => ({ ...current, outcome: value as BakeLogEntry["outcome"] }))}
+                      >
+                        <option value="keeper">{t.keeper}</option>
+                        <option value="tweak">{t.tweak}</option>
+                        <option value="fail">{t.fail}</option>
+                      </SelectField>
+                    </div>
+                    <div className="photoRow">
+                      <label className="ghostButton fileButton">
+                        <input type="file" accept="image/*" onChange={onBakePhotoChange} />
+                        {t.addPhoto}
+                      </label>
+                      {logDraft.photoDataUrl ? (
+                        <button
+                          className="ghostButton"
+                          type="button"
+                          onClick={() => setLogDraft((current) => ({ ...current, photoDataUrl: undefined, photoName: undefined }))}
+                        >
+                          {t.removePhoto}
+                        </button>
+                      ) : null}
+                    </div>
+                    {logDraft.photoDataUrl ? (
+                      <div className="photoPreview">
+                        <img src={logDraft.photoDataUrl} alt={logDraft.photoName ?? "Bake preview"} />
+                        <span>{logDraft.photoName}</span>
+                      </div>
+                    ) : (
+                      <p className="sectionMeta">{t.noPhoto}</p>
+                    )}
+                    <textarea
+                      value={logDraft.notes}
+                      onChange={(event) => setLogDraft((current) => ({ ...current, notes: event.target.value }))}
+                      placeholder={t.notesPlaceholder}
+                    />
+                    <button className="actionButton fullWidth" type="button" onClick={addBakeLog}>
+                      {t.logBake}
+                    </button>
+                    <p className="sectionMeta">
+                      {bakeLog.length} {t.journalCount}
+                    </p>
+                    <div className="savedList scrollArea">
+                      {bakeLog.map((entry) => (
+                        <div className="savedItem staticItem" key={entry.id}>
+                          <strong>{entry.recipeName}</strong>
+                          <span>
+                            {entry.rating}/5, {t[entry.outcome]}, {formatDateTime(entry.date, settings.language)}
+                          </span>
+                          {entry.photoDataUrl ? (
+                            <img className="journalImage" src={entry.photoDataUrl} alt={entry.photoName ?? entry.recipeName} />
+                          ) : null}
+                          {entry.notes ? <p>{entry.notes}</p> : null}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+              </section>
+            </>
+          ) : null}
         </aside>
       </div>
       <section className="printSheet">
@@ -3475,7 +3895,7 @@ export function App() {
               <p className="eyebrow">{activeStyle.origin}</p>
               <h2>{displayRecipeName}</h2>
               <p className="printSubtitle">
-                {activeStyle.name} · {activeStyle.flourType} · {normalizedInput.doughBalls} x {normalizedInput.ballWeight}g
+                {activeStyle.name} · {activeStyle.flourType} · {batchDescriptor}
               </p>
             </div>
             <div className="printMetricRow">
@@ -3722,74 +4142,6 @@ export function App() {
   );
 }
 
-function PanelTitle({
-  icon,
-  label,
-  summary,
-  action,
-  collapseAction,
-  collapsed
-}: {
-  icon: ReactNode;
-  label: string;
-  summary?: string;
-  action?: ReactNode;
-  collapseAction?: ReactNode;
-  collapsed?: boolean;
-}) {
-  return (
-    <div className={`panelTitle ${collapsed ? "collapsed" : ""}`}>
-      <div className="panelTitleText">
-        <span>
-          {icon}
-          {label}
-        </span>
-        {summary ? <p className="panelSummary">{summary}</p> : null}
-      </div>
-      {action || collapseAction ? (
-        <div className="panelActionRow noPrint">
-          {action ? <div className="panelAction">{action}</div> : null}
-          {collapseAction ? <div className="panelAction">{collapseAction}</div> : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function FermentationStageCard({
-  title,
-  subtitle,
-  note,
-  children
-}: {
-  title: string;
-  subtitle: string;
-  note?: string;
-  durationLabel?: string;
-  temperatureLabel?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="fermentCard">
-      <div className="fermentCardHeader">
-        <strong>{title}</strong>
-        <span>({subtitle})</span>
-      </div>
-      <div className="fermentCardFields">{children}</div>
-      {note ? <p className="fermentCardNote">{note}</p> : null}
-    </div>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
 function Ingredient({
   label,
   value,
@@ -3817,16 +4169,10 @@ function SignalRow({ signal }: { signal: QualitySignal }) {
         <strong>{signal.label}</strong>
         <span>{signal.value}</span>
       </div>
-      <div className="signalTrack" aria-hidden="true">
-        <div style={{ width: `${signal.score}%` }} />
-      </div>
+      <progress className="signalTrack" max={100} value={signal.score} aria-hidden="true" />
       <p>{signal.note}</p>
     </div>
   );
-}
-
-function Notice({ children, tone }: { children: ReactNode; tone: "ok" | "notice" | "warning" | "danger" }) {
-  return <p className={`notice ${tone}`}>{children}</p>;
 }
 
 

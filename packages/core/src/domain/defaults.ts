@@ -1,5 +1,5 @@
 import { getDefaultSauceOptionId } from "../data/sauces";
-import { HIDE_OIL_SUGAR_STYLES, PIZZA_STYLES, STYLE_IDS, getStyleById } from "../data/styles";
+import { HIDE_OIL_SUGAR_STYLES, PIZZA_STYLES, STYLE_IDS, getStyleById, isBreadStyleId } from "../data/styles";
 import { bestDefaultFlourId } from "./flour";
 import type {
   CalculatorInput,
@@ -83,7 +83,13 @@ export const FERMENTATION_PRESETS = {
     finalRiseHours: 3,
     description: "Traditional cool-room fermentation."
   }
-} satisfies Record<string, Omit<FermentationSchedule, "roomTempF" | "cellarTempF" | "fridgeTempF"> & { label: string; description: string }>;
+} satisfies Record<
+  string,
+  Omit<
+    FermentationSchedule,
+    "roomTempF" | "cellarTempF" | "fridgeTempF" | "roomHumidityPercent" | "cellarHumidityPercent" | "fridgeHumidityPercent"
+  > & { label: string; description: string }
+>;
 
 export type FermentationPresetKey = keyof typeof FERMENTATION_PRESETS;
 
@@ -91,7 +97,10 @@ export function scheduleFromPreset(
   preset: FermentationPresetKey,
   roomTempF = 72,
   cellarTempF = 55,
-  fridgeTempF = 39
+  fridgeTempF = 39,
+  roomHumidityPercent = 60,
+  cellarHumidityPercent = 70,
+  fridgeHumidityPercent = 45
 ): FermentationSchedule {
   const selected = FERMENTATION_PRESETS[preset];
   return {
@@ -102,7 +111,10 @@ export function scheduleFromPreset(
     finalRiseHours: selected.finalRiseHours,
     roomTempF,
     cellarTempF,
-    fridgeTempF
+    fridgeTempF,
+    roomHumidityPercent,
+    cellarHumidityPercent,
+    fridgeHumidityPercent
   };
 }
 
@@ -155,6 +167,15 @@ export function defaultOvenOptions(type = "steel-stone"): OvenOptions {
 
 export function defaultSauceOptions(styleId = PIZZA_STYLES[0].id): SauceOptions {
   const style = getStyleById(styleId) ?? PIZZA_STYLES[0];
+
+  if (isBreadStyleId(style.id)) {
+    return {
+      enabled: false,
+      style: "classic",
+      recipeId: getDefaultSauceOptionId(style.id),
+      gramsPerPizza: 0
+    };
+  }
 
   if (style.id === STYLE_IDS.FLAMMKUCHEN || style.id === STYLE_IDS.FOCACCIA || style.id === STYLE_IDS.COCA) {
     return {
@@ -259,7 +280,10 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
         finalRiseHours: 1,
         roomTempF: 72,
         cellarTempF: 55,
-        fridgeTempF: 39
+        fridgeTempF: 39,
+        roomHumidityPercent: 60,
+        cellarHumidityPercent: 70,
+        fridgeHumidityPercent: 45
       },
       flourBlendEnabled: true,
       flourBlend: [
@@ -270,6 +294,71 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
         ...defaultOvenOptions(style.defaultOven),
         pizzaOvenStoneTempF: 800,
         pizzaOvenTopTempF: 900
+      }
+    };
+  }
+
+  if (style.id === STYLE_IDS.COUNTRY_LOAF) {
+    return {
+      ...baseInput,
+      hydrationPercent: 74,
+      saltPercent: 2.2,
+      doughBalls: 1,
+      ballWeight: 850,
+      flourBlendEnabled: true,
+      flourBlend: [
+        { flourId: "bread-flour", percentage: 90 },
+        { flourId: "whole-wheat", percentage: 10 }
+      ],
+      fermentation: {
+        roomTempHours: 1,
+        cellarTempHours: 0,
+        coldBulkHours: 14,
+        coldBallHours: 0,
+        finalRiseHours: 2,
+        roomTempF: 72,
+        cellarTempF: 55,
+        fridgeTempF: 39,
+        roomHumidityPercent: 60,
+        cellarHumidityPercent: 70,
+        fridgeHumidityPercent: 45
+      }
+    };
+  }
+
+  if (style.id === STYLE_IDS.SANDWICH_LOAF) {
+    return {
+      ...baseInput,
+      hydrationPercent: 68,
+      saltPercent: 2,
+      oilPercent: 5,
+      sugarPercent: 4,
+      milkPowderPercent: 2,
+      doughBalls: 1,
+      ballWeight: 900,
+      flourBlendEnabled: true,
+      flourBlend: [{ flourId: "bread-flour", percentage: 100 }],
+      pan: {
+        ...defaultPanOptions(),
+        enabled: true,
+        shape: "rectangular",
+        length: 9,
+        width: 5,
+        depth: 4,
+        unit: "in"
+      },
+      fermentation: {
+        roomTempHours: 2,
+        cellarTempHours: 0,
+        coldBulkHours: 0,
+        coldBallHours: 0,
+        finalRiseHours: 2,
+        roomTempF: 72,
+        cellarTempF: 55,
+        fridgeTempF: 39,
+        roomHumidityPercent: 60,
+        cellarHumidityPercent: 70,
+        fridgeHumidityPercent: 45
       }
     };
   }

@@ -1,3 +1,4 @@
+import { isLoafStyleId, isTinLoafStyleId } from "../data/styles";
 import type { BakeStep, CalculatorInput, ScheduleMode } from "./types";
 
 function addMinutes(date: Date, minutes: number): Date {
@@ -24,6 +25,8 @@ export function buildBakePlan(
 ): BakeStep[] {
   const steps: Omit<BakeStep, "time">[] = [];
   const preferment = prefermentLabel(input);
+  const loafWorkflow = isLoafStyleId(input.styleId);
+  const tinLoaf = isTinLoafStyleId(input.styleId);
 
   if (input.preferment.kind !== "none") {
     steps.push({
@@ -85,7 +88,29 @@ export function buildBakePlan(
     });
   }
 
-  if (input.fermentation.coldBulkHours > 0 && !input.pan.enabled) {
+  if (loafWorkflow) {
+    steps.push({
+      label: "Pre-shape",
+      description:
+        input.doughBalls > 1
+          ? `Divide into ${input.doughBalls} pieces and pre-shape them.`
+          : "Pre-shape the loaf gently after bulk fermentation.",
+      durationMinutes: 10,
+      type: "action"
+    });
+    steps.push({
+      label: "Bench rest",
+      description: "Let the dough relax before the final shape.",
+      durationMinutes: 20,
+      type: "timed"
+    });
+    steps.push({
+      label: "Final shape",
+      description: tinLoaf ? "Shape into a tight pan loaf and load the tin." : "Shape the loaf tightly and place it in the proofing basket.",
+      durationMinutes: 10,
+      type: "action"
+    });
+  } else if (input.fermentation.coldBulkHours > 0 && !input.pan.enabled) {
     steps.push({
       label: "Divide and ball",
       description: "Portion the dough and ball it after the bulk cold stage.",
@@ -96,7 +121,7 @@ export function buildBakePlan(
 
   if (input.fermentation.coldBallHours > 0) {
     steps.push({
-      label: "Cold Ball",
+      label: loafWorkflow ? "Cold Proof" : "Cold Ball",
       description: `${input.fermentation.coldBallHours}h refrigerated around ${input.fermentation.fridgeTempF}F.`,
       durationMinutes: input.fermentation.coldBallHours * 60,
       type: "timed"
@@ -105,7 +130,7 @@ export function buildBakePlan(
 
   if (input.fermentation.finalRiseHours > 0) {
     steps.push({
-      label: input.fermentation.coldBallHours > 0 || input.fermentation.coldBulkHours > 0 ? "Temper" : "Ball Proof",
+      label: loafWorkflow ? "Final Proof" : input.fermentation.coldBallHours > 0 || input.fermentation.coldBulkHours > 0 ? "Temper" : "Ball Proof",
       description: `${input.fermentation.finalRiseHours}h final rise before baking.`,
       durationMinutes: input.fermentation.finalRiseHours * 60,
       type: "timed"
@@ -114,7 +139,11 @@ export function buildBakePlan(
 
   steps.push({
     label: "Ready to bake",
-    description: "Preheat, stretch, top, and bake.",
+    description: loafWorkflow
+      ? tinLoaf
+        ? "Preheat, load the tin, bake through, then cool before slicing."
+        : "Preheat, score, steam or cover the loaf, then bake and cool fully."
+      : "Preheat, stretch, top, and bake.",
     durationMinutes: 0,
     type: "ready"
   });

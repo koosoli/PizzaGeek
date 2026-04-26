@@ -1,5 +1,5 @@
 import { getSauceOption } from "../data/sauces";
-import { getStyleById, STYLE_IDS } from "../data/styles";
+import { getStyleById, isBreadStyleId, isLoafStyleId, isTinLoafStyleId, STYLE_IDS } from "../data/styles";
 import { analyzeFlourBlend, normalizeBlend } from "./flour";
 import type {
   CalculatorInput,
@@ -53,19 +53,38 @@ export function fahrenheitToCelsius(fahrenheit: number): number {
   return Math.round(((fahrenheit - 32) * 5) / 9);
 }
 
+function humidityFermentationFactor(
+  humidityPercent: number,
+  idealPercent: number,
+  maxEffect: number,
+  minPercent: number,
+  maxPercent: number
+): number {
+  const clampedHumidity = clamp(humidityPercent, minPercent, maxPercent);
+  if (clampedHumidity === idealPercent) return 1;
+
+  const range = clampedHumidity > idealPercent ? maxPercent - idealPercent : idealPercent - minPercent;
+  if (range <= 0) return 1;
+
+  return 1 + ((clampedHumidity - idealPercent) / range) * maxEffect;
+}
+
 export function effectiveFermentationHours(input: CalculatorInput): number {
   const schedule = input.fermentation;
   const roomTempFactor = 2 ** ((schedule.roomTempF - 68) / 15);
   const cellarTempFactor = 0.2 + ((clamp(schedule.cellarTempF, 50, 65) - 50) / 15) * 0.4;
   const fridgeTempFactor = 0.1 + ((clamp(schedule.fridgeTempF, 34, 46) - 34) / 12) * 0.1;
+  const roomHumidityFactor = humidityFermentationFactor(schedule.roomHumidityPercent, 60, 0.08, 30, 85);
+  const cellarHumidityFactor = humidityFermentationFactor(schedule.cellarHumidityPercent, 72, 0.06, 45, 90);
+  const fridgeHumidityFactor = humidityFermentationFactor(schedule.fridgeHumidityPercent, 50, 0.04, 30, 80);
   const coldHours = schedule.coldBulkHours + schedule.coldBallHours;
   const finalWarmupFactor = coldHours > 0 || schedule.cellarTempHours > 0 ? 0.6 : 1;
 
   return (
-    schedule.roomTempHours * roomTempFactor +
-    schedule.cellarTempHours * cellarTempFactor +
-    coldHours * fridgeTempFactor +
-    schedule.finalRiseHours * roomTempFactor * finalWarmupFactor
+    schedule.roomTempHours * roomTempFactor * roomHumidityFactor +
+    schedule.cellarTempHours * cellarTempFactor * cellarHumidityFactor +
+    coldHours * fridgeTempFactor * fridgeHumidityFactor +
+    schedule.finalRiseHours * roomTempFactor * roomHumidityFactor * finalWarmupFactor
   );
 }
 
@@ -193,16 +212,42 @@ export function estimatePanBallWeight(styleId: string, pan: PanOptions): number 
           ? pan.depth <= 1 ? 1.7 : 2.5
           : style?.id === STYLE_IDS.CHICAGO_DEEP_DISH
             ? pan.depth >= 2 ? 5.1 : 4.3
-            : style?.id === STYLE_IDS.ROMAN
-              ? 1.8
-              : style?.id === STYLE_IDS.GRANDMA
-                ? 1.5
-                : 2.3;
+              : style?.id === STYLE_IDS.ROMAN
+                ? 1.8
+                : style?.id === STYLE_IDS.GRANDMA
+                  ? 1.5
+                  : style?.id === STYLE_IDS.SANDWICH_LOAF
+                    ? pan.depth >= 3.5
+                      ? 19
+                      : 16
+                  : 2.3;
   return Math.round(area * density);
 }
 
 export function getOvenBakeProfile(style: PizzaStyle, oven: OvenOptions, pan?: PanOptions): DoughResult["oven"] {
   const panArea = pan ? calculatePanAreaSqIn(pan) : undefined;
+
+  if (style.id === STYLE_IDS.COUNTRY_LOAF) {
+    return {
+      tempF: 475,
+      tempC: fahrenheitToCelsius(475),
+      minTime: 35,
+      maxTime: 48,
+      unit: "minutes",
+      detail: "Steam first 20 min or bake covered, then vent to finish."
+    };
+  }
+
+  if (style.id === STYLE_IDS.SANDWICH_LOAF) {
+    return {
+      tempF: 400,
+      tempC: fahrenheitToCelsius(400),
+      minTime: 30,
+      maxTime: 40,
+      unit: "minutes",
+      detail: "Bake in a tin and rotate once the top has set."
+    };
+  }
 
   if (style.panStyle && pan && panArea) {
     if (style.id === STYLE_IDS.DETROIT) {
@@ -572,30 +617,53 @@ export function generateInstructions(
   }
   if (input.fermentation.coldBulkHours > 0) {
     instructions.push(
-      `Cold bulk ${input.fermentation.coldBulkHours}h at about ${input.fermentation.fridgeTempF}F as one mass, then divide and ball.`
+      `Cold bulk ${input.fermentation.coldBulkHours}h at about ${input.fermentation.fridgeTempF}F as one mass${isLoafStyleId(style.id) ? ", then pre-shape and rest." : ", then divide and ball."}`
     );
   }
   if (input.fermentation.coldBallHours > 0) {
     instructions.push(
-      `Cold ball ${input.fermentation.coldBallHours}h at about ${input.fermentation.fridgeTempF}F after dividing the dough.`
+      `${isLoafStyleId(style.id) ? "Cold proof" : "Cold ball"} ${input.fermentation.coldBallHours}h at about ${input.fermentation.fridgeTempF}F after dividing the dough.`
     );
   }
 
-  if (style.panStyle) {
+  if (isLoafStyleId(style.id)) {
+    instructions.push(
+      input.doughBalls > 1
+        ? `Divide into ${input.doughBalls} pieces around ${input.ballWeight}g each, pre-shape, and rest 20 minutes before the final shape.`
+        : "Pre-shape the dough gently, then rest it for 20 minutes before the final shape."
+    );
+    instructions.push(
+      isTinLoafStyleId(style.id)
+        ? "Shape into a tight log, place seam-side down in a greased loaf tin, and proof until the crown nears the rim."
+        : "Shape the loaf tightly, place it seam-side up in a floured banneton or towel-lined bowl, and proof until aerated."
+    );
+  } else if (style.panStyle) {
     instructions.push("Oil the pan generously, place dough in the pan, and proof until relaxed before final stretching.");
   } else {
     instructions.push(`Divide into ${input.doughBalls} dough ball${input.doughBalls === 1 ? "" : "s"} around ${input.ballWeight}g each and proof until extensible.`);
   }
 
   if (input.fermentation.finalRiseHours > 0) {
-    instructions.push(`Temper for ${input.fermentation.finalRiseHours}h at about ${input.fermentation.roomTempF}F before topping and baking.`);
+    instructions.push(
+      isLoafStyleId(style.id)
+        ? `Final proof ${input.fermentation.finalRiseHours}h at about ${input.fermentation.roomTempF}F until the dough springs back slowly when pressed.`
+        : `Temper for ${input.fermentation.finalRiseHours}h at about ${input.fermentation.roomTempF}F before topping and baking.`
+    );
   }
 
   if (sauce) {
     instructions.push(...sauce.instructions);
   }
 
-  instructions.push(`Bake at ${isNeapolitanFamily(style.id) && input.oven.type === "wood-fired" ? "very high heat" : "the calculated oven setting"} until the bottom is crisp and the top is properly browned.`);
+  if (isLoafStyleId(style.id)) {
+    instructions.push(
+      style.id === STYLE_IDS.SANDWICH_LOAF
+        ? "Bake in the tin until the top is richly browned, then de-pan and cool fully before slicing."
+        : "Score the loaf, bake with steam or under a cover for the first part of the bake, then vent and finish until deeply colored."
+    );
+  } else {
+    instructions.push(`Bake at ${isNeapolitanFamily(style.id) && input.oven.type === "wood-fired" ? "very high heat" : "the calculated oven setting"} until the bottom is crisp and the top is properly browned.`);
+  }
 
   return instructions;
 }

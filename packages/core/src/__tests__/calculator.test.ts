@@ -61,6 +61,24 @@ describe("calculateDough", () => {
     expect(result.oven.unit).toBe("seconds");
   });
 
+  it("builds bread-first defaults for country loaves without sauce", () => {
+    const input = createDefaultInput(STYLE_IDS.COUNTRY_LOAF);
+    const result = calculateDough(input);
+
+    expect(input.doughBalls).toBe(1);
+    expect(input.ballWeight).toBe(850);
+    expect(input.fermentation.coldBulkHours).toBe(14);
+    expect(input.fermentation.coldBallHours).toBe(0);
+    expect(input.flourBlend).toEqual([
+      { flourId: "bread-flour", percentage: 90 },
+      { flourId: "whole-wheat", percentage: 10 }
+    ]);
+    expect(input.sauce.enabled).toBe(false);
+    expect(result.sauce).toBeUndefined();
+    expect(result.oven.detail).toContain("Steam first 20 min");
+    expect(result.oven.unit).toBe("minutes");
+  });
+
   it("includes sauce guidance when sauce is enabled", () => {
     const input = createDefaultInput(STYLE_IDS.NEW_YORK);
     const result = calculateDough(input);
@@ -131,6 +149,20 @@ describe("calculateDough", () => {
 
     expect(effectiveFermentationHours(warmInput)).toBeGreaterThan(effectiveFermentationHours(coldInput));
   });
+
+  it("lets humidity modestly affect room-temperature fermentation intensity", () => {
+    const dryInput = createDefaultInput(STYLE_IDS.NEW_YORK);
+    dryInput.fermentation.roomTempHours = 10;
+    dryInput.fermentation.finalRiseHours = 2;
+    dryInput.fermentation.roomHumidityPercent = 40;
+
+    const humidInput = createDefaultInput(STYLE_IDS.NEW_YORK);
+    humidInput.fermentation.roomTempHours = 10;
+    humidInput.fermentation.finalRiseHours = 2;
+    humidInput.fermentation.roomHumidityPercent = 75;
+
+    expect(effectiveFermentationHours(humidInput)).toBeGreaterThan(effectiveFermentationHours(dryInput));
+  });
 });
 
 describe("buildBakePlan", () => {
@@ -144,6 +176,21 @@ describe("buildBakePlan", () => {
     expect(plan.at(-1)?.label).toBe("Ready to bake");
     expect(plan.at(-1)?.time.toISOString()).toBe(readyAt.toISOString());
     expect(plan[0].time.getTime()).toBeLessThan(readyAt.getTime());
+  });
+
+  it("uses loaf-specific shaping steps for sandwich loaves", () => {
+    const input = createDefaultInput(STYLE_IDS.SANDWICH_LOAF);
+    const startAt = new Date("2026-04-26T10:00:00");
+
+    const plan = buildBakePlan(input, "starting-now", startAt);
+    const labels = plan.map((step) => step.label);
+
+    expect(labels).toContain("Pre-shape");
+    expect(labels).toContain("Bench rest");
+    expect(labels).toContain("Final shape");
+    expect(labels).toContain("Final Proof");
+    expect(plan.find((step) => step.label === "Final shape")?.description).toContain("tin");
+    expect(plan.at(-1)?.description).toContain("cool before slicing");
   });
 });
 

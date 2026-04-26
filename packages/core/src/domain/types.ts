@@ -108,6 +108,9 @@ export interface FermentationSchedule {
   roomTempF: number;
   cellarTempF: number;
   fridgeTempF: number;
+  roomHumidityPercent: number;
+  cellarHumidityPercent: number;
+  fridgeHumidityPercent: number;
 }
 
 export interface PanOptions {

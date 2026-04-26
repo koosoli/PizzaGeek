@@ -236,6 +236,23 @@ h3 {
   text-transform: uppercase;
 }
 
+.heroEyebrowRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.heroTag {
+  padding: 6px 10px;
+  border: 1px solid rgba(196, 90, 43, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.52);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .heroMeta {
   display: flex;
   flex-wrap: wrap;
@@ -309,6 +326,7 @@ h3 {
   border-radius: 22px;
   background: var(--panel);
   box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
 
@@ -372,6 +390,65 @@ h3 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 10px;
+}
+
+.styleGridGuided {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.stylePickerStack {
+  display: grid;
+  gap: 12px;
+}
+
+.breadProfileGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.breadProfileCard {
+  min-height: 180px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-soft);
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease;
+}
+
+.breadProfileCard:hover {
+  transform: translateY(-1px);
+  border-color: rgba(196, 90, 43, 0.3);
+}
+
+.breadProfileCard.active {
+  border-color: rgba(196, 90, 43, 0.38);
+  box-shadow: 0 14px 24px rgba(196, 90, 43, 0.12);
+  background: rgba(196, 90, 43, 0.08);
+}
+
+.breadProfileCard strong {
+  font-size: 16px;
+}
+
+.breadProfileCard p,
+.breadProfileCard span {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.breadProfileCard span {
+  font-size: 12px;
 }
 
 .styleGroupCard {
@@ -489,6 +566,16 @@ h3 {
   margin-top: 12px;
 }
 
+.modeRow {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.modeHint {
+  max-width: 720px;
+}
+
 .fieldGrid.compact {
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
@@ -503,6 +590,7 @@ h3 {
   margin-top: 12px;
 }
 
+.fieldLabel,
 .field > span {
   color: var(--muted);
   font-size: 12px;
@@ -513,6 +601,29 @@ h3 {
   color: var(--soft);
   font-size: 11px;
   line-height: 1.45;
+}
+
+.fieldSliderWrap {
+  display: grid;
+  gap: 6px;
+}
+
+.fieldSliderWrap.mobileOnly {
+  display: grid;
+}
+
+.fieldSlider {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.fieldSliderScale {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--soft);
+  font-size: 11px;
 }
 
 .fieldMeta {
@@ -592,7 +703,7 @@ h3 {
 
 .fermentCardFields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
 }
 
@@ -606,6 +717,7 @@ h3 {
 
 select,
 .field.single input,
+.styleLibrarySelect,
 .saveRow input,
 textarea,
 .blendRow input {
@@ -1014,27 +1126,43 @@ textarea {
 }
 
 .signalTrack {
+  width: 100%;
   height: 9px;
+  -webkit-appearance: none;
+  appearance: none;
   border-radius: 999px;
   overflow: hidden;
   background: rgba(27, 24, 19, 0.08);
+  border: 0;
 }
 
-.signalTrack div {
-  height: 100%;
+.signalTrack::-webkit-progress-bar {
+  background: rgba(27, 24, 19, 0.08);
   border-radius: inherit;
-  background: var(--green);
 }
 
-.signalRow.notice .signalTrack div {
+.signalTrack::-webkit-progress-value {
+  background: var(--green);
+  border-radius: inherit;
+}
+
+.signalTrack::-moz-progress-bar {
+  background: var(--green);
+  border-radius: inherit;
+}
+
+.signalRow.notice .signalTrack::-webkit-progress-value,
+.signalRow.notice .signalTrack::-moz-progress-bar {
   background: var(--gold);
 }
 
-.signalRow.warning .signalTrack div {
+.signalRow.warning .signalTrack::-webkit-progress-value,
+.signalRow.warning .signalTrack::-moz-progress-bar {
   background: var(--accent);
 }
 
-.signalRow.danger .signalTrack div {
+.signalRow.danger .signalTrack::-webkit-progress-value,
+.signalRow.danger .signalTrack::-moz-progress-bar {
   background: var(--danger);
 }
 
@@ -1092,6 +1220,80 @@ textarea {
   margin-top: 14px;
 }
 
+.plannerSummaryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.plannerSummaryCard {
+  min-height: 88px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-soft);
+  display: grid;
+  gap: 6px;
+  align-content: center;
+}
+
+.plannerSummaryCard span,
+.plannerShortcut span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.plannerSummaryCard strong {
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.plannerQuickSection {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.plannerQuickSection .panelMetaRow strong {
+  font-size: 13px;
+}
+
+.plannerShortcutGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.plannerShortcut {
+  min-height: 84px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  display: grid;
+  gap: 4px;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background 140ms ease;
+}
+
+.plannerShortcut:hover {
+  transform: translateY(-1px);
+  border-color: rgba(196, 90, 43, 0.32);
+  box-shadow: 0 10px 20px rgba(62, 44, 23, 0.08);
+}
+
+.plannerShortcut.active {
+  border-color: rgba(196, 90, 43, 0.38);
+  background: linear-gradient(180deg, rgba(196, 90, 43, 0.12), rgba(196, 90, 43, 0.02)), var(--surface-strong);
+}
+
 .timeline li {
   display: grid;
   grid-template-columns: 140px minmax(0, 1fr);
@@ -1111,6 +1313,36 @@ textarea {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
+}
+
+.dataPortability {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.dataTransferRow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.statusNote {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.statusNote.success {
+  color: var(--green);
+}
+
+.statusNote.error {
+  color: var(--danger);
+}
+
+.statusNote.notice {
+  color: var(--gold);
 }
 
 .savedList {
@@ -1187,6 +1419,10 @@ textarea {
 }
 
 @media (max-width: 760px) {
+  .fieldSliderWrap.mobileOnly {
+    display: grid;
+  }
+
   .appShell {
     padding: 16px 14px 28px;
   }
@@ -1214,6 +1450,8 @@ textarea {
   }
 
   .styleGrid,
+  .styleGridGuided,
+  .breadProfileGrid,
   .fieldGrid,
   .fieldGrid.compact,
   .fermentGrid,
@@ -1221,6 +1459,7 @@ textarea {
   .metricStrip,
   .guidanceGrid,
   .summaryGrid,
+  .plannerSummaryGrid,
   .blendRow,
   .sauceDetailGrid,
   .printColumns,
