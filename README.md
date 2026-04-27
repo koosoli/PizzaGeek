@@ -17,7 +17,7 @@ This is an independent community project and is not affiliated with Pizza Nerd.
 - Flour blending with per-flour gram breakdowns
 - Fermentation planning across room temp, cellar, cold bulk, cold ball, and temper stages
 - Sauce recipes, bake logging, saved recipes, costing, and clean print sheets
-- English and German UI
+- English, German, and Italian UI
 - Shared TypeScript core that can later power a mobile app
 
 ## Local Development
@@ -46,7 +46,7 @@ That split is intentional: a future `apps/mobile` client can reuse the same calc
 
 ## Release Notes
 
-Current release: `v0.3.0`
+Current release: `v0.5.0`
 
 See [CHANGELOG.md](./CHANGELOG.md) for the latest release notes.
 

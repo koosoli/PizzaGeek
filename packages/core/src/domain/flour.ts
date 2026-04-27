@@ -87,6 +87,26 @@ export function normalizeBlend(blend: FlourBlendItem[]): FlourBlendItem[] {
   return normalized;
 }
 
+export function combineBlendSegments(segments: Array<{ blend: FlourBlendItem[]; weight: number }>): FlourBlendItem[] {
+  const totals = new Map<string, number>();
+
+  for (const segment of segments) {
+    if (segment.weight <= 0) continue;
+
+    const normalized = normalizeBlend(segment.blend);
+    for (const item of normalized) {
+      totals.set(item.flourId, (totals.get(item.flourId) ?? 0) + (item.percentage / 100) * segment.weight);
+    }
+  }
+
+  return normalizeBlend(
+    Array.from(totals.entries()).map(([flourId, percentage]) => ({
+      flourId,
+      percentage
+    }))
+  );
+}
+
 export function describeBlend(blend: FlourBlendItem[]): string {
   const normalized = normalizeBlend(blend);
   return normalized

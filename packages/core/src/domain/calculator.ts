@@ -1,6 +1,6 @@
 import { getSauceOption } from "../data/sauces";
 import { getStyleById, isBreadStyleId, isLoafStyleId, isTinLoafStyleId, STYLE_IDS } from "../data/styles";
-import { analyzeFlourBlend, normalizeBlend } from "./flour";
+import { analyzeFlourBlend, combineBlendSegments, normalizeBlend } from "./flour";
 import type {
   CalculatorInput,
   DoughResult,
@@ -15,12 +15,14 @@ import type {
 } from "./types";
 
 const YEAST_MULTIPLIER: Record<YeastType, number> = {
+  none: 0,
   idy: 1,
   ady: 1.33,
   fresh: 3
 };
 
 const YEAST_LIMITS: Record<YeastType, { min: number; max: number }> = {
+  none: { min: 0, max: 0 },
   idy: { min: 0.05, max: 2 },
   ady: { min: 0.07, max: 2.7 },
   fresh: { min: 0.15, max: 6 }
@@ -34,7 +36,15 @@ function isNaturalStarterPreferment(input: CalculatorInput): boolean {
 }
 
 function getEffectiveYeastType(input: CalculatorInput): YeastType {
-  return isNaturalStarterPreferment(input) ? "fresh" : input.yeastType;
+  return calculateYeastPercent(input) > 0 ? input.yeastType : "fresh";
+}
+
+function sameBlend(left: ReturnType<typeof normalizeBlend>, right: ReturnType<typeof normalizeBlend>): boolean {
+  if (left.length !== right.length) return false;
+
+  return left.every(
+    (item, index) => item.flourId === right[index]?.flourId && item.percentage === right[index]?.percentage
+  );
 }
 
 const MIXER_FRICTION_F: Record<MixerType, number> = {
@@ -100,6 +110,14 @@ export function effectiveFermentationHours(input: CalculatorInput): number {
 }
 
 export function calculateYeastPercent(input: CalculatorInput): number {
+  if (input.yeastType === "none") {
+    return 0;
+  }
+
+  if (isNaturalStarterPreferment(input)) {
+    return Math.max(0, input.manualYeastPercent ?? 0);
+  }
+
   if (input.manualYeastPercent && input.manualYeastPercent > 0) {
     return input.manualYeastPercent;
   }
@@ -107,10 +125,19 @@ export function calculateYeastPercent(input: CalculatorInput): number {
   const hours = Math.max(1, effectiveFermentationHours(input));
   const base = 3.48 * hours ** -1.447;
   const shortFermentBoost = hours < 4 ? 1 + (0.25 * (4 - hours)) / 3 : 1;
-  const yeastType = getEffectiveYeastType(input);
+  const yeastType = input.yeastType;
   const yeast = base * shortFermentBoost * YEAST_MULTIPLIER[yeastType] * ovenYeastMultiplier(input.oven);
   const limits = YEAST_LIMITS[yeastType];
   return clamp(yeast, limits.min, limits.max);
+}
+
+function calculatePrefermentLeavening(input: CalculatorInput, prefermentFlour: number): number {
+  if (!isNaturalStarterPreferment(input)) {
+    return Math.max(0.1, round(prefermentFlour * 0.0008, 2));
+  }
+
+  const inoculationPercent = clamp(input.preferment.starterInoculationPercent, 1, 100);
+  return Math.max(1, round((prefermentFlour * inoculationPercent) / 100, 1));
 }
 
 export function ovenYeastMultiplier(oven: OvenOptions): number {
@@ -455,10 +482,10 @@ export function calculateIngredients(input: CalculatorInput, yeastPercent: numbe
     prefermentWater = Math.round(
       prefermentFlour * (input.preferment.kind === "poolish" ? 1 : input.preferment.bigaHydration / 100)
     );
-    prefermentYeast = naturalStarter ? round(yeast, 1) : Math.max(0.1, round(prefermentFlour * 0.0008, 2));
+    prefermentYeast = calculatePrefermentLeavening(input, prefermentFlour);
     mainFlour = Math.max(0, roundedFlour - prefermentFlour);
     mainWater = Math.max(0, roundedWater - prefermentWater);
-    mainYeast = naturalStarter ? 0 : Math.max(0, round(yeast - prefermentYeast, 1));
+    mainYeast = naturalStarter ? round(yeast, 1) : Math.max(0, round(yeast - prefermentYeast, 1));
   }
 
   const totalDoughWeight =
@@ -539,7 +566,24 @@ export function calculateDough(input: CalculatorInput): DoughResult {
     throw new Error("Dough balls and ball weight must be positive.");
   }
 
-  const normalizedBlend = normalizeBlend(input.flourBlend);
+  const legacyBlend = normalizeBlend(input.flourBlend);
+  const prefermentBlendCandidate = normalizeBlend(
+    input.prefermentFlourBlend?.length ? input.prefermentFlourBlend : input.flourBlend
+  );
+  const mainDoughBlendCandidate = normalizeBlend(
+    input.mainDoughFlourBlend?.length ? input.mainDoughFlourBlend : input.flourBlend
+  );
+  const useLegacyBlend =
+    sameBlend(prefermentBlendCandidate, mainDoughBlendCandidate) && !sameBlend(prefermentBlendCandidate, legacyBlend);
+  const prefermentBlend = useLegacyBlend ? legacyBlend : prefermentBlendCandidate;
+  const mainDoughBlend = useLegacyBlend ? legacyBlend : mainDoughBlendCandidate;
+  const normalizedBlend =
+    input.preferment.kind === "none"
+      ? mainDoughBlend
+      : combineBlendSegments([
+          { blend: prefermentBlend, weight: input.preferment.flourPercent },
+          { blend: mainDoughBlend, weight: 100 - input.preferment.flourPercent }
+        ]);
   const coldHours = input.fermentation.coldBulkHours + input.fermentation.coldBallHours;
   const flourBlend = analyzeFlourBlend(
     normalizedBlend,
@@ -587,6 +631,7 @@ export function calculateDough(input: CalculatorInput): DoughResult {
 }
 
 function yeastLabel(type: YeastType): string {
+  if (type === "none") return "no commercial yeast";
   if (type === "ady") return "active dry yeast";
   if (type === "fresh") return "fresh yeast";
   return "instant dry yeast";
@@ -622,7 +667,6 @@ export function generateInstructions(
             : input.preferment.bigaStyle === "sauerdough"
               ? "Sourdough"
           : "Biga";
-  const naturalStarter = isNaturalStarterPreferment(input);
 
   if (input.preferment.kind !== "none") {
     instructions.push(
@@ -644,7 +688,7 @@ export function generateInstructions(
   const waterAmount = input.preferment.kind === "none" ? ingredients.totalWater : ingredients.mainWater;
   const yeast = input.preferment.kind === "none" ? ingredients.totalYeast : ingredients.mainYeast;
   instructions.push(
-    `Mix final dough with ${flour}g ${input.preferment.kind === "none" ? "flour" : "additional flour"}, ${waterAmount}g ${input.preferment.kind === "none" ? "water" : "additional water"}, ${ingredients.totalSalt}g salt${naturalStarter || !yeast ? "" : `, and ${yeast}g ${input.preferment.kind === "none" ? yeastLabel(input.yeastType) : `additional ${yeastLabel(input.yeastType)}`}`}${input.preferment.kind !== "none" ? `${naturalStarter || !yeast ? ", plus the ripe " : " plus the ripe "}${prefermentName}` : ""}.`
+    `Mix final dough with ${flour}g ${input.preferment.kind === "none" ? "flour" : "additional flour"}, ${waterAmount}g ${input.preferment.kind === "none" ? "water" : "additional water"}, ${ingredients.totalSalt}g salt${!yeast ? "" : `, and ${yeast}g ${input.preferment.kind === "none" ? yeastLabel(input.yeastType) : `additional ${yeastLabel(input.yeastType)}`}`}${input.preferment.kind !== "none" ? `${!yeast ? ", plus the ripe " : " plus the ripe "}${prefermentName}` : ""}.`
   );
 
   const enrichments = [

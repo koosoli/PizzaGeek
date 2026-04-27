@@ -137,6 +137,7 @@ export function defaultPreferment(): PrefermentOptions {
     flourPercent: 30,
     bigaHydration: 55,
     bigaStyle: "standard",
+    starterInoculationPercent: 20,
     roomHours: 12,
     coldHours: 0
   };
@@ -238,6 +239,7 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
   const style = getStyleById(styleId) ?? PIZZA_STYLES[0];
   const preset = choosePresetForStyle(style.id);
   const hideEnrichments = HIDE_OIL_SUGAR_STYLES.has(style.name);
+  const defaultBlend = [{ flourId: bestDefaultFlourId(style.flourType), percentage: 100 }];
   const baseInput: CalculatorInput = {
     styleId: style.id,
     doughBalls: style.defaultBallCount,
@@ -255,7 +257,9 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
     fermentation: scheduleFromPreset(preset),
     preferment: defaultPreferment(),
     flourBlendEnabled: true,
-    flourBlend: [{ flourId: bestDefaultFlourId(style.flourType), percentage: 100 }],
+    flourBlend: defaultBlend,
+    prefermentFlourBlend: defaultBlend,
+    mainDoughFlourBlend: defaultBlend,
     pan: { ...defaultPanOptions(), enabled: Boolean(style.panStyle) },
     oven: defaultOvenOptions(style.defaultOven),
     sauce: defaultSauceOptions(style.id)

@@ -26,6 +26,7 @@ import {
   calculateCost,
   calculateDough,
   choosePresetForStyle,
+  combineBlendSegments,
   createDefaultInput,
   defaultCostSettings,
   estimatePanBallWeight,
@@ -84,6 +85,7 @@ import {
   type ProductMode
 } from "./productModes";
 type PrefermentMode = "none" | "poolish" | "biga" | "tiga" | "lievito-madre" | "sauerdough";
+type NaturalStarterChoice = "none" | "lievito-madre" | "sauerdough";
 
 type QualitySignal = {
   label: string;
@@ -101,6 +103,15 @@ type BlendBreakdownRow = {
   prefermentGrams: number;
   mainDoughGrams: number;
 };
+
+type StageBlendBreakdownRow = {
+  flourId: string;
+  percentage: number;
+  flourLabel: string;
+  grams: number;
+};
+
+type BlendTarget = "prefermentFlourBlend" | "mainDoughFlourBlend";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -294,6 +305,7 @@ const copy = {
     lard: "Lard",
     milkPowder: "Milk powder",
     yeastType: "Yeast",
+    naturalStarter: "Natural starter",
     mixerType: "Mixer",
     manualYeast: "Manual yeast",
     flourTemp: "Flour temp",
@@ -318,6 +330,7 @@ const copy = {
     sauerdough: "Sourdough",
     prefermentFlour: "Preferment flour",
     bigaHydration: "Biga hydration",
+    starterInoculation: "Starter inoculation",
     prefermentRoom: "Preferment room",
     prefermentCold: "Preferment cold",
     flourBlend: "Flour blend",
@@ -331,7 +344,7 @@ const copy = {
     workspaceHint: "Guided keeps the essentials up front. Switch to Studio for flour blending, costing, saves, and bake logging.",
     guidedStylesHint: "Start with a core style, then use the full library for regional or specialty doughs.",
     prefermentHint:
-      "Bassinage is a mixing technique, not a preferment. Lievito madre and sourdough use the preferment slot here and replace extra yeast in the final dough.",
+      "Bassinage is a mixing technique, not a preferment. Lievito madre and sourdough use the preferment slot here. Leave manual yeast blank for starter-only doughs, or add a manual yeast % for hybrid leavening.",
     appInstall: "App install",
     appInstallHint: "Install Pizza Geek for faster launch and offline recipe access.",
     installApp: "Install app",
@@ -506,6 +519,7 @@ const copy = {
     lard: "Schmalz",
     milkPowder: "Milchpulver",
     yeastType: "Hefe",
+    naturalStarter: "Natürlicher Starter",
     mixerType: "Mischer",
     manualYeast: "Manuelle Hefe",
     flourTemp: "Mehltemp.",
@@ -530,6 +544,7 @@ const copy = {
     sauerdough: "Sauerteig",
     prefermentFlour: "Vorteig-Mehl",
     bigaHydration: "Biga-Hydration",
+    starterInoculation: "Starter-Anteil",
     prefermentRoom: "Vorteig Raum",
     prefermentCold: "Vorteig kalt",
     flourBlend: "Mehlmischung",
@@ -543,7 +558,7 @@ const copy = {
     workspaceHint: "Geführt zeigt zuerst das Wesentliche. Studio öffnet Mehlmischung, Kosten, Speicher und Backjournal.",
     guidedStylesHint: "Starte mit einem Kernstil und wechsle für regionale oder spezielle Teige in die volle Bibliothek.",
     prefermentHint:
-      "Bassinage ist eine Mischtechnik, kein Vorteig. Lievito madre und Sauerteig nutzen hier den Vorteig-Slot und ersetzen zusätzliche Hefe im Hauptteig.",
+      "Bassinage ist eine Mischtechnik, kein Vorteig. Lievito madre und Sauerteig nutzen hier den Vorteig-Slot. Lasse die manuelle Hefe leer fur reine Starterteige oder trage einen Prozentwert fur Hybridteige ein.",
     appInstall: "App-Installation",
     appInstallHint: "Installiere Pizza Geek für schnelleren Start und Offline-Zugriff auf Rezepte.",
     installApp: "App installieren",
@@ -718,6 +733,7 @@ const copy = {
     lard: "Strutto",
     milkPowder: "Latte in polvere",
     yeastType: "Lievito",
+    naturalStarter: "Starter naturale",
     mixerType: "Impastatrice",
     manualYeast: "Lievito manuale",
     flourTemp: "Temp. farina",
@@ -742,6 +758,7 @@ const copy = {
     sauerdough: "Lievito naturale",
     prefermentFlour: "Farina prefermento",
     bigaHydration: "Idratazione biga",
+    starterInoculation: "Inoculo starter",
     prefermentRoom: "Prefermento ambiente",
     prefermentCold: "Prefermento freddo",
     flourBlend: "Blend farine",
@@ -755,7 +772,7 @@ const copy = {
     workspaceHint: "Guidato tiene l'essenziale in primo piano. Studio apre blend farine, costi, salvataggi e diario di cottura.",
     guidedStylesHint: "Parti da uno stile base, poi usa la libreria completa per impasti regionali o speciali.",
     prefermentHint:
-      "Il bassinage è una tecnica di impasto, non un prefermento. Lievito madre e lievito naturale usano qui lo slot del prefermento e sostituiscono il lievito aggiuntivo nell'impasto finale.",
+      "Il bassinage è una tecnica di impasto, non un prefermento. Lievito madre e lievito naturale usano qui lo slot del prefermento. Lascia vuoto il lievito manuale per impasti solo starter oppure aggiungi una percentuale per una lievitazione ibrida.",
     appInstall: "Installazione app",
     appInstallHint: "Installa Pizza Geek per un avvio più rapido e accesso offline alle ricette.",
     installApp: "Installa app",
@@ -897,6 +914,12 @@ function getPerPizzaLabel(locale: LocaleCode): string {
 }
 
 function getYeastOptionLabel(type: YeastType, locale: LocaleCode): string {
+  if (type === "none") {
+    if (locale === "de") return "Keine zusätzliche Hefe";
+    if (locale === "it") return "Nessun lievito aggiuntivo";
+    return "No commercial yeast";
+  }
+
   if (type === "ady") {
     if (locale === "de") return "ADY (Aktive Trockenhefe)";
     if (locale === "it") return "ADY (Lievito secco attivo)";
@@ -916,6 +939,7 @@ function getYeastOptionLabel(type: YeastType, locale: LocaleCode): string {
 
 function getYeastOptions(locale: LocaleCode): Array<{ value: YeastType; label: string }> {
   return [
+    { value: "none", label: getYeastOptionLabel("none", locale) },
     { value: "idy", label: getYeastOptionLabel("idy", locale) },
     { value: "ady", label: getYeastOptionLabel("ady", locale) },
     { value: "fresh", label: getYeastOptionLabel("fresh", locale) }
@@ -1170,14 +1194,20 @@ function getPrefermentLeaveningName(input: CalculatorInput, locale: LocaleCode):
 
 function getNaturalStarterUiHint(locale: LocaleCode): string {
   if (locale === "de") {
-    return "Bei Lievito madre oder Sauerteig ist keine zusätzliche Industriehefe aktiv. Die App ignoriert IDY, ADY und Frischhefe in diesem Modus.";
+    return "Lievito madre und Sauerteig belegen hier den Vorteig. Ohne manuelle Hefe bleibt der Hauptteig hefefrei; mit einem manuellen Prozentwert kannst du Hybridteige rechnen.";
   }
 
   if (locale === "it") {
-    return "Con lievito madre o lievito naturale non viene usato lievito commerciale aggiuntivo. In questa modalità l'app ignora IDY, ADY e lievito fresco.";
+    return "Lievito madre e lievito naturale occupano qui il prefermento. Se il lievito manuale resta vuoto l'impasto finale non usa lievito commerciale; con una percentuale manuale puoi fare impasti ibridi.";
   }
 
-  return "With lievito madre or sourdough, no extra commercial yeast is used. In this mode the app ignores IDY, ADY, and fresh yeast.";
+  return "Lievito madre and sourdough live in the preferment slot here. Leave manual yeast blank for starter-only doughs, or add a manual yeast % if you want a hybrid dough.";
+}
+
+function getNaturalStarterChoice(input: CalculatorInput): NaturalStarterChoice {
+  if (input.preferment.kind === "biga" && input.preferment.bigaStyle === "lievito-madre") return "lievito-madre";
+  if (input.preferment.kind === "biga" && input.preferment.bigaStyle === "sauerdough") return "sauerdough";
+  return "none";
 }
 
 function getPrefermentMode(input: CalculatorInput): PrefermentMode {
@@ -1189,20 +1219,30 @@ function getPrefermentMode(input: CalculatorInput): PrefermentMode {
   return "biga";
 }
 
+function getDefaultStarterInoculationPercent(mode: PrefermentMode): number {
+  if (mode === "lievito-madre") return 50;
+  if (mode === "sauerdough") return 20;
+  return 20;
+}
+
 function getPrefermentPatch(mode: PrefermentMode): Partial<CalculatorInput["preferment"]> {
   if (mode === "none") return { kind: "none" };
-  if (mode === "poolish") return { kind: "poolish", bigaStyle: "standard", bigaHydration: 100 };
-  if (mode === "tiga") return { kind: "biga", bigaStyle: "tiga", bigaHydration: 55 };
-  if (mode === "lievito-madre") return { kind: "biga", bigaStyle: "lievito-madre", bigaHydration: 50 };
-  if (mode === "sauerdough") return { kind: "biga", bigaStyle: "sauerdough", bigaHydration: 100 };
-  return { kind: "biga", bigaStyle: "standard", bigaHydration: 55 };
+  if (mode === "poolish") return { kind: "poolish", bigaStyle: "standard", bigaHydration: 100, starterInoculationPercent: 20 };
+  if (mode === "tiga") return { kind: "biga", bigaStyle: "tiga", bigaHydration: 55, starterInoculationPercent: 20 };
+  if (mode === "lievito-madre") return { kind: "biga", bigaStyle: "lievito-madre", bigaHydration: 50, starterInoculationPercent: 50 };
+  if (mode === "sauerdough") return { kind: "biga", bigaStyle: "sauerdough", bigaHydration: 100, starterInoculationPercent: 20 };
+  return { kind: "biga", bigaStyle: "standard", bigaHydration: 55, starterInoculationPercent: 20 };
 }
 
 function getPrefermentDisplayName(input: CalculatorInput, locale: LocaleCode): string {
   if (input.preferment.kind === "poolish") return "Poolish";
   if (input.preferment.bigaStyle === "tiga") return "Tiga";
   if (input.preferment.bigaStyle === "lievito-madre") return "Lievito madre";
-  if (input.preferment.bigaStyle === "sauerdough") return locale === "de" ? "Sauerteig" : "Sourdough";
+  if (input.preferment.bigaStyle === "sauerdough") {
+    if (locale === "de") return "Sauerteig";
+    if (locale === "it") return "Lievito naturale";
+    return "Sourdough";
+  }
   return "Biga";
 }
 
@@ -1463,6 +1503,65 @@ function allocateBlendGrams(blend: FlourBlendItem[], totalGrams: number): number
   return grams;
 }
 
+function buildStageBlendBreakdown(blend: FlourBlendItem[], totalGrams: number): StageBlendBreakdownRow[] {
+  const grams = allocateBlendGrams(blend, totalGrams);
+
+  return blend.map((item, index) => ({
+    flourId: item.flourId,
+    percentage: item.percentage,
+    flourLabel: getFlourLabel(item.flourId),
+    grams: grams[index] ?? 0
+  }));
+}
+
+function mergeBlendBreakdowns(
+  overallBlend: FlourBlendItem[],
+  prefermentRows: StageBlendBreakdownRow[],
+  mainDoughRows: StageBlendBreakdownRow[]
+): BlendBreakdownRow[] {
+  const rows = new Map<string, BlendBreakdownRow>();
+
+  for (const item of overallBlend) {
+    rows.set(item.flourId, {
+      flourId: item.flourId,
+      percentage: item.percentage,
+      flourLabel: getFlourLabel(item.flourId),
+      totalGrams: 0,
+      prefermentGrams: 0,
+      mainDoughGrams: 0
+    });
+  }
+
+  const ensureRow = (row: StageBlendBreakdownRow) => {
+    if (!rows.has(row.flourId)) {
+      rows.set(row.flourId, {
+        flourId: row.flourId,
+        percentage: 0,
+        flourLabel: row.flourLabel,
+        totalGrams: 0,
+        prefermentGrams: 0,
+        mainDoughGrams: 0
+      });
+    }
+
+    return rows.get(row.flourId)!;
+  };
+
+  for (const row of prefermentRows) {
+    const entry = ensureRow(row);
+    entry.prefermentGrams += row.grams;
+    entry.totalGrams += row.grams;
+  }
+
+  for (const row of mainDoughRows) {
+    const entry = ensureRow(row);
+    entry.mainDoughGrams += row.grams;
+    entry.totalGrams += row.grams;
+  }
+
+  return Array.from(rows.values()).filter((row) => row.totalGrams > 0 || row.percentage > 0);
+}
+
 function getFlourLabel(flourId: string): string {
   const flour = FLOURS.find((entry) => entry.id === flourId);
   return flour ? `${flour.brand} ${flour.name}` : flourId;
@@ -1623,6 +1722,26 @@ const LOCALIZED_SAUCE_OPTIONS: Partial<Record<LocaleCode, Record<string, Partial
       proTip:
         "Echte neapolitanische Sauce bleibt roh. Der 90-Sekunden-Backvorgang im 900°F-Ofen \"gart\" die Sauce perfekt. Vorheriges Kochen macht den Geschmack stumpf und uebergart."
     }
+  },
+  it: {
+    "neapolitan-primary": {
+      cookType: "a crudo",
+      ingredients: [
+        { item: "Pomodori San Marzano (DOP)", amount: "400g", note: "Interi, pelati" },
+        { item: "Sale marino", amount: "Quanto basta", note: "Assaggia prima se i pomodori sono già salati" },
+        { item: "Foglie di basilico fresco", amount: "4-5 foglie", note: "Spezzate a mano, non tritate" },
+        { item: "Olio extravergine d'oliva", amount: "Un filo", note: "Di buona qualità" }
+      ],
+      instructions: [
+        "Schiaccia i pomodori a mano direttamente in una ciotola, senza usare blender o robot da cucina. La salsa deve restare rustica, non diventare una purea.",
+        "Aggiungi il sale con moderazione e solo dopo aver assaggiato i pomodori, perché molti sono già salati.",
+        "Spezza le foglie di basilico con le mani e incorporale delicatamente.",
+        "Aggiungi un filo d'olio solo poco prima dell'utilizzo.",
+        "Usa subito oppure conserva in frigorifero fino a 3 giorni. Non cuocere."
+      ],
+      proTip:
+        "La vera salsa napoletana resta cruda. Nei 90 secondi di cottura in forno molto caldo cuoce perfettamente sulla pizza; precuocerla prima ne spegne il sapore e la cuoce troppo."
+    }
   }
 };
 
@@ -1685,26 +1804,53 @@ function normalizeCalculatorInput(candidate: CalculatorInput): CalculatorInput {
     ...base.preferment,
     ...candidate?.preferment
   };
-  const naturalStarter =
-    preferment.kind === "biga" &&
-    (preferment.bigaStyle === "lievito-madre" || preferment.bigaStyle === "sauerdough");
+  const prefermentMode =
+    preferment.kind === "none"
+      ? "none"
+      : preferment.kind === "poolish"
+        ? "poolish"
+        : preferment.bigaStyle === "tiga"
+          ? "tiga"
+          : preferment.bigaStyle === "lievito-madre"
+            ? "lievito-madre"
+            : preferment.bigaStyle === "sauerdough"
+              ? "sauerdough"
+              : "biga";
   const sauce = {
     ...base.sauce,
     ...candidate?.sauce
   };
   const normalizedSauceOption = getSauceOption(styleId, sauce.recipeId);
+  const legacyBlend = candidate?.flourBlend?.length ? normalizeBlendAfterRemoval(candidate.flourBlend) : base.flourBlend;
+  const prefermentFlourBlend = candidate?.prefermentFlourBlend?.length
+    ? normalizeBlendAfterRemoval(candidate.prefermentFlourBlend)
+    : legacyBlend;
+  const mainDoughFlourBlend = candidate?.mainDoughFlourBlend?.length
+    ? normalizeBlendAfterRemoval(candidate.mainDoughFlourBlend)
+    : legacyBlend;
+  const flourBlend =
+    preferment.kind === "none"
+      ? mainDoughFlourBlend
+      : combineBlendSegments([
+          { blend: prefermentFlourBlend, weight: preferment.flourPercent },
+          { blend: mainDoughFlourBlend, weight: 100 - preferment.flourPercent }
+        ]);
 
   return {
     ...base,
     ...candidate,
-    yeastType: naturalStarter ? "fresh" : candidate?.yeastType ?? base.yeastType,
-    manualYeastPercent: naturalStarter ? undefined : candidate?.manualYeastPercent,
+    yeastType: candidate?.yeastType ?? base.yeastType,
+    manualYeastPercent: candidate?.manualYeastPercent,
     fermentation: {
       ...base.fermentation,
       ...candidate?.fermentation
     },
     preferment: {
       ...preferment,
+      starterInoculationPercent:
+        typeof preferment.starterInoculationPercent === "number"
+          ? preferment.starterInoculationPercent
+          : getDefaultStarterInoculationPercent(prefermentMode),
       bigaStyle: preferment.bigaStyle === "bassinage" ? "standard" : preferment.bigaStyle
     },
     sauce: {
@@ -1712,7 +1858,9 @@ function normalizeCalculatorInput(candidate: CalculatorInput): CalculatorInput {
       recipeId: normalizedSauceOption?.id ?? sauce.recipeId,
       style: normalizedSauceOption ? inferSauceStyleFromOption(normalizedSauceOption) : sauce.style
     },
-    flourBlend: candidate?.flourBlend?.length ? normalizeBlendAfterRemoval(candidate.flourBlend) : base.flourBlend,
+    flourBlend,
+    prefermentFlourBlend,
+    mainDoughFlourBlend,
     pan: {
       ...base.pan,
       ...candidate?.pan,
@@ -2013,12 +2161,37 @@ function getMethodSteps(
   const bakeWindow = formatBakeWindow(result.oven, locale, unit, bakeDetail);
   const loafWorkflow = isLoafStyleId(input.styleId);
   const tinLoaf = isTinLoafStyleId(input.styleId);
-  const naturalStarter = isNaturalStarterPreferment(input);
+  const yeastLabel =
+    locale === "de"
+      ? input.yeastType === "none"
+        ? "keiner zusätzlichen Hefe"
+        : input.yeastType === "ady"
+          ? "aktive Trockenhefe"
+          : input.yeastType === "fresh"
+            ? "Frischhefe"
+            : "Instant-Trockenhefe"
+      : locale === "it"
+        ? input.yeastType === "none"
+          ? "nessun lievito aggiuntivo"
+          : input.yeastType === "ady"
+            ? "lievito secco attivo"
+            : input.yeastType === "fresh"
+              ? "lievito fresco"
+              : "lievito secco istantaneo"
+        : input.yeastType === "none"
+          ? "no commercial yeast"
+          : input.yeastType === "ady"
+            ? "active dry yeast"
+            : input.yeastType === "fresh"
+              ? "fresh yeast"
+              : "instant dry yeast";
 
   if (input.preferment.kind !== "none") {
     steps.push(
       locale === "de"
         ? `${prefermentName} mischen: ${ingredients.prefermentFlour}g Mehl (${input.preferment.flourPercent}% vom Gesamtmehl), ${ingredients.prefermentWater}g Wasser und ${ingredients.prefermentYeast}g ${prefermentLeaveningName} kombinieren. ${input.preferment.roomHours}h bei Raumtemperatur reifen lassen${input.preferment.coldHours > 0 ? `, danach ${input.preferment.coldHours}h kalt führen` : ""}.`
+        : locale === "it"
+          ? `Prepara ${prefermentName}: unisci ${ingredients.prefermentFlour}g di farina (${input.preferment.flourPercent}% della farina totale), ${ingredients.prefermentWater}g di acqua e ${ingredients.prefermentYeast}g di ${prefermentLeaveningName}. Lascia fermentare per ${input.preferment.roomHours}h a temperatura ambiente${input.preferment.coldHours > 0 ? `, poi ${input.preferment.coldHours}h al freddo` : ""}.`
         : `Mix ${prefermentName}: combine ${ingredients.prefermentFlour}g flour (${input.preferment.flourPercent}% of total flour), ${ingredients.prefermentWater}g water, and ${ingredients.prefermentYeast}g ${prefermentLeaveningName}. Ferment ${input.preferment.roomHours}h at room temperature${input.preferment.coldHours > 0 ? `, then ${input.preferment.coldHours}h cold` : ""}.`
     );
   }
@@ -2027,6 +2200,8 @@ function getMethodSteps(
     steps.push(
       locale === "de"
         ? `Aktive Trockenhefe in ${water.adyProofing.proofingWaterG}g Wasser bei ${formatTemperaturePair(water.adyProofing.proofingWaterTempF, unit)} aktivieren. Die restlichen ${water.adyProofing.remainingWaterG}g Wasser auf ${formatTemperaturePair(water.adyProofing.remainingWaterTempF, unit)} einstellen.`
+        : locale === "it"
+          ? `Attiva il lievito secco attivo in ${water.adyProofing.proofingWaterG}g di acqua a ${formatTemperaturePair(water.adyProofing.proofingWaterTempF, unit)}. Tieni i restanti ${water.adyProofing.remainingWaterG}g di acqua a ${formatTemperaturePair(water.adyProofing.remainingWaterTempF, unit)}.`
         : `Bloom ADY in ${water.adyProofing.proofingWaterG}g water at ${formatTemperaturePair(water.adyProofing.proofingWaterTempF, unit)}. Keep the remaining ${water.adyProofing.remainingWaterG}g water at ${formatTemperaturePair(water.adyProofing.remainingWaterTempF, unit)}.`
     );
   } else {
@@ -2036,44 +2211,56 @@ function getMethodSteps(
   const flour = input.preferment.kind === "none" ? ingredients.totalFlour : ingredients.mainFlour;
   const waterAmount = input.preferment.kind === "none" ? ingredients.totalWater : ingredients.mainWater;
   const yeast = input.preferment.kind === "none" ? ingredients.totalYeast : ingredients.mainYeast;
-  const yeastLabel =
-    input.yeastType === "ady" ? "aktive Trockenhefe" : input.yeastType === "fresh" ? "Frischhefe" : "Instant-Trockenhefe";
 
   steps.push(
     locale === "de"
-      ? `Hauptteig mischen mit ${flour}g ${input.preferment.kind === "none" ? "Mehl" : "zusätzlichem Mehl"}, ${waterAmount}g ${input.preferment.kind === "none" ? "Wasser" : "zusätzlichem Wasser"}, ${ingredients.totalSalt}g Salz${naturalStarter || !yeast ? "" : ` und ${yeast}g ${input.preferment.kind === "none" ? yeastLabel : `zusätzlicher ${yeastLabel}`}`}${input.preferment.kind !== "none" ? ` sowie dem reifen ${prefermentName}` : ""}.`
-      : `Mix the final dough with ${flour}g ${input.preferment.kind === "none" ? "flour" : "fresh flour"}, ${waterAmount}g ${input.preferment.kind === "none" ? "water" : "fresh water"}, ${ingredients.totalSalt}g salt${naturalStarter || !yeast ? "" : `, and ${yeast}g ${input.preferment.kind === "none" ? (input.yeastType === "ady" ? "active dry yeast" : input.yeastType === "fresh" ? "fresh yeast" : "instant dry yeast") : `additional ${input.yeastType === "ady" ? "active dry yeast" : input.yeastType === "fresh" ? "fresh yeast" : "instant dry yeast"}`}`}${input.preferment.kind !== "none" ? `${naturalStarter || !yeast ? ", plus the ripe " : " plus the ripe "}${prefermentName}` : ""}.`
+      ? `Hauptteig mischen mit ${flour}g ${input.preferment.kind === "none" ? "Mehl" : "zusätzlichem Mehl"}, ${waterAmount}g ${input.preferment.kind === "none" ? "Wasser" : "zusätzlichem Wasser"}, ${ingredients.totalSalt}g Salz${!yeast ? "" : ` und ${yeast}g ${input.preferment.kind === "none" ? yeastLabel : `zusätzlicher ${yeastLabel}`}`}${input.preferment.kind !== "none" ? `${!yeast ? " sowie dem reifen " : " plus dem reifen "}${prefermentName}` : ""}.`
+      : locale === "it"
+        ? `Impasta il finale con ${flour}g di ${input.preferment.kind === "none" ? "farina" : "farina aggiuntiva"}, ${waterAmount}g di ${input.preferment.kind === "none" ? "acqua" : "acqua aggiuntiva"}, ${ingredients.totalSalt}g di sale${!yeast ? "" : ` e ${yeast}g di ${input.preferment.kind === "none" ? yeastLabel : `${yeastLabel} aggiuntivo`}`}${input.preferment.kind !== "none" ? `${!yeast ? ", più il " : ", poi aggiungi il "}${prefermentName} maturo` : ""}.`
+      : `Mix the final dough with ${flour}g ${input.preferment.kind === "none" ? "flour" : "fresh flour"}, ${waterAmount}g ${input.preferment.kind === "none" ? "water" : "fresh water"}, ${ingredients.totalSalt}g salt${!yeast ? "" : `, and ${yeast}g ${input.preferment.kind === "none" ? (input.yeastType === "ady" ? "active dry yeast" : input.yeastType === "fresh" ? "fresh yeast" : "instant dry yeast") : `additional ${input.yeastType === "ady" ? "active dry yeast" : input.yeastType === "fresh" ? "fresh yeast" : "instant dry yeast"}`}`}${input.preferment.kind !== "none" ? `${!yeast ? ", plus the ripe " : " plus the ripe "}${prefermentName}` : ""}.`
   );
 
   const enrichments = [
-    ingredients.totalOil > 0 ? `${ingredients.totalOil}g Öl` : null,
-    ingredients.totalLard > 0 ? `${ingredients.totalLard}g Schmalz` : null,
-    ingredients.totalSugar > 0 ? `${ingredients.totalSugar}g Zucker` : null,
-    ingredients.totalHoney > 0 ? `${ingredients.totalHoney}g Honig` : null,
-    ingredients.totalMalt > 0 ? `${ingredients.totalMalt}g Malz` : null,
-    ingredients.totalMilkPowder > 0 ? `${ingredients.totalMilkPowder}g Milchpulver` : null
+    ingredients.totalOil > 0 ? `${ingredients.totalOil}g ${locale === "de" ? "Öl" : locale === "it" ? "olio" : "oil"}` : null,
+    ingredients.totalLard > 0 ? `${ingredients.totalLard}g ${locale === "de" ? "Schmalz" : locale === "it" ? "strutto" : "lard"}` : null,
+    ingredients.totalSugar > 0 ? `${ingredients.totalSugar}g ${locale === "de" ? "Zucker" : locale === "it" ? "zucchero" : "sugar"}` : null,
+    ingredients.totalHoney > 0 ? `${ingredients.totalHoney}g ${locale === "de" ? "Honig" : locale === "it" ? "miele" : "honey"}` : null,
+    ingredients.totalMalt > 0 ? `${ingredients.totalMalt}g ${locale === "de" ? "Malz" : locale === "it" ? "malto" : "malt"}` : null,
+    ingredients.totalMilkPowder > 0 ? `${ingredients.totalMilkPowder}g ${locale === "de" ? "Milchpulver" : locale === "it" ? "latte in polvere" : "milk powder"}` : null
   ].filter(Boolean);
 
   if (enrichments.length > 0) {
-    steps.push(locale === "de" ? `Weitere Zutaten einarbeiten: ${enrichments.join(", ")}.` : `Add the enrichments: ${enrichments.join(", ")}.`);
+    steps.push(
+      locale === "de"
+        ? `Weitere Zutaten einarbeiten: ${enrichments.join(", ")}.`
+        : locale === "it"
+          ? `Aggiungi gli arricchimenti: ${enrichments.join(", ")}.`
+          : `Add the enrichments: ${enrichments.join(", ")}.`
+    );
   }
 
   if (input.mixerType === "hand") {
     steps.push(
       locale === "de"
         ? "20 Minuten ruhen lassen, dann kneten oder dehnen und falten, bis der Teig glatt und elastisch ist."
+        : locale === "it"
+          ? "Lascia riposare 20 minuti, poi impasta oppure fai pieghe finché l'impasto è liscio ed elastico."
         : "Rest 20 minutes, then knead or stretch-and-fold until the dough is smooth and elastic."
     );
   } else if (input.mixerType === "spiral") {
     steps.push(
       locale === "de"
         ? "Etwa 3 Minuten auf Stufe 1 mischen, dann 5-8 Minuten auf Stufe 2 bis zur guten Entwicklung."
+        : locale === "it"
+          ? "Impasta circa 3 minuti in prima velocità, poi 5-8 minuti in seconda finché l'impasto è ben sviluppato."
         : "Mix on speed 1 for about 3 minutes, then on speed 2 for 5-8 minutes until the dough is developed."
     );
   } else {
     steps.push(
       locale === "de"
         ? "Auf niedriger Stufe mischen, dann auf mittlerer Stufe auskneten, bis sich der Teig sauber von der Schüssel löst."
+        : locale === "it"
+          ? "Impasta a bassa velocità finché gli ingredienti si uniscono, poi a velocità medio-bassa finché l'impasto si stacca bene dalla ciotola."
         : "Mix on low until combined, then on medium-low until the dough clears the bowl and feels cohesive."
     );
   }
@@ -2082,6 +2269,8 @@ function getMethodSteps(
     steps.push(
       locale === "de"
         ? `Stockgare ${input.fermentation.roomTempHours}h bei etwa ${formatTemperature(input.fermentation.roomTempF, unit)}.`
+        : locale === "it"
+          ? `Puntata di ${input.fermentation.roomTempHours}h a circa ${formatTemperature(input.fermentation.roomTempF, unit)}.`
         : `Bulk ferment ${input.fermentation.roomTempHours}h @ ${formatTemperature(input.fermentation.roomTempF, unit)}.`
     );
   }
@@ -2090,6 +2279,8 @@ function getMethodSteps(
     steps.push(
       locale === "de"
         ? `Danach ${input.fermentation.cellarTempHours}h bei Kellerbedingungen um ${formatTemperature(input.fermentation.cellarTempF, unit)}.`
+        : locale === "it"
+          ? `Poi ${input.fermentation.cellarTempHours}h in cantina a circa ${formatTemperature(input.fermentation.cellarTempF, unit)}.`
         : `Cellar ferment ${input.fermentation.cellarTempHours}h @ ${formatTemperature(input.fermentation.cellarTempF, unit)}.`
     );
   }
@@ -2098,6 +2289,8 @@ function getMethodSteps(
     steps.push(
       locale === "de"
         ? `Kalte Stockgare ${input.fermentation.coldBulkHours}h im Kühlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}.${loafWorkflow ? " Danach locker vorformen und entspannen lassen." : " Danach teilen und rundschleifen."}`
+        : locale === "it"
+          ? `Puntata in frigo per ${input.fermentation.coldBulkHours}h a circa ${formatTemperature(input.fermentation.fridgeTempF, unit)}.${loafWorkflow ? " Poi fai una preforma leggera e lascia rilassare l'impasto." : " Poi dividi e fai le palline."}`
         : `Cold bulk ${input.fermentation.coldBulkHours}h @ ${formatTemperature(input.fermentation.fridgeTempF, unit)} as one mass${loafWorkflow ? ", then pre-shape and rest." : ", then divide and ball."}`
     );
   }
@@ -2108,6 +2301,10 @@ function getMethodSteps(
         ? input.doughBalls > 1
           ? `In ${input.doughBalls} Stücke zu je etwa ${input.ballWeight}g teilen, locker vorformen und 20 Minuten entspannen lassen.`
           : "Den Teig locker vorformen und 20 Minuten entspannen lassen."
+        : locale === "it"
+          ? input.doughBalls > 1
+            ? `Dividi in ${input.doughBalls} pezzi da circa ${input.ballWeight}g, fai una preforma delicata e lascia riposare 20 minuti.`
+            : "Fai una preforma delicata e lascia riposare l'impasto 20 minuti."
         : input.doughBalls > 1
           ? `Divide into ${input.doughBalls} pieces around ${input.ballWeight}g each, pre-shape gently, and rest 20 minutes.`
           : "Pre-shape the dough gently, then rest it for 20 minutes."
@@ -2117,6 +2314,10 @@ function getMethodSteps(
         ? tinLoaf
           ? "Danach straff zu einem Kastenlaib formen und mit dem Schluss nach unten in die gefettete Form setzen."
           : "Danach straff formen und mit dem Schluss nach oben in den bemehlten Garkorb oder in eine ausgelegte Schüssel legen."
+        : locale === "it"
+          ? tinLoaf
+            ? "Dai la forma finale a cassetta e metti l'impasto nello stampo unto con la chiusura verso il basso."
+            : "Dai una forma stretta e metti il filone con la chiusura verso l'alto in un banneton infarinato o in una ciotola foderata."
         : tinLoaf
           ? "Final-shape into a tight pan loaf and place it seam-side down in the greased tin."
           : "Final-shape tightly and place the loaf seam-side up in a floured banneton or lined bowl."
@@ -2125,6 +2326,8 @@ function getMethodSteps(
     const divideStep =
       locale === "de"
         ? `In ${input.doughBalls} Teigling${input.doughBalls === 1 ? "" : "e"} zu je etwa ${input.ballWeight}g teilen und rundschleifen.`
+        : locale === "it"
+          ? `Dividi in ${input.doughBalls} pall${input.doughBalls === 1 ? "a" : "e"} da circa ${input.ballWeight}g e fai la pirlatura.`
         : `Divide into ${input.doughBalls} dough ball${input.doughBalls === 1 ? "" : "s"} at about ${input.ballWeight}g each.`;
 
     if (input.fermentation.coldBulkHours > 0 || input.fermentation.coldBallHours === 0) {
@@ -2138,6 +2341,10 @@ function getMethodSteps(
         ? loafWorkflow
           ? `Kalte Gare ${input.fermentation.coldBallHours}h im Kühlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}.`
           : `Kalte Stückgare ${input.fermentation.coldBallHours}h im Kühlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}.`
+        : locale === "it"
+          ? loafWorkflow
+            ? `Appretto in frigo per ${input.fermentation.coldBallHours}h a circa ${formatTemperature(input.fermentation.fridgeTempF, unit)} dopo la formatura.`
+            : `Appretto in frigo per ${input.fermentation.coldBallHours}h a circa ${formatTemperature(input.fermentation.fridgeTempF, unit)} dopo la divisione.`
         : loafWorkflow
           ? `Cold proof ${input.fermentation.coldBallHours}h @ ${formatTemperature(input.fermentation.fridgeTempF, unit)} after shaping.`
           : `Cold ball ${input.fermentation.coldBallHours}h @ ${formatTemperature(input.fermentation.fridgeTempF, unit)} after dividing.`
@@ -2148,6 +2355,8 @@ function getMethodSteps(
     steps.push(
       locale === "de"
         ? "Die Form großzügig ölen, den Teig einlegen und vor dem finalen Ausziehen entspannt aufgehen lassen."
+        : locale === "it"
+          ? "Ungere bene la teglia, sistemare l'impasto dentro e lasciarlo rilassare prima della stesura finale."
         : "Oil the pan generously, place the dough in it, and proof until relaxed before the final stretch."
     );
   }
@@ -2158,6 +2367,10 @@ function getMethodSteps(
         ? loafWorkflow
           ? `Endgare ${input.fermentation.finalRiseHours}h bei etwa ${formatTemperature(input.fermentation.roomTempF, unit)}, bis der Teig auf sanften Druck langsam zurückkommt.`
           : `Temperieren ${input.fermentation.finalRiseHours}h bei etwa ${formatTemperature(input.fermentation.roomTempF, unit)} vor dem Backen.`
+        : locale === "it"
+          ? loafWorkflow
+            ? `Appretto finale di ${input.fermentation.finalRiseHours}h a circa ${formatTemperature(input.fermentation.roomTempF, unit)} finché l'impasto ritorna lentamente se premuto.`
+            : `Rimetti in temperatura per ${input.fermentation.finalRiseHours}h a circa ${formatTemperature(input.fermentation.roomTempF, unit)} prima della cottura.`
         : loafWorkflow
           ? `Final proof ${input.fermentation.finalRiseHours}h @ ${formatTemperature(input.fermentation.roomTempF, unit)} until the dough springs back slowly when pressed.`
           : `Temper ${input.fermentation.finalRiseHours}h @ ${formatTemperature(input.fermentation.roomTempF, unit)} before baking.`
@@ -2168,6 +2381,8 @@ function getMethodSteps(
     steps.push(
       locale === "de"
         ? `Sauce vorbereiten: ${sauceOption?.name ?? result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, copy.de)}. Etwa ${result.sauce.perPizzaGrams}g pro Pizza verwenden, insgesamt ${result.sauce.totalGrams}g für den Batch.`
+        : locale === "it"
+          ? `Prepara il sugo: ${sauceOption?.name ?? result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, copy.it)}. Usa circa ${result.sauce.perPizzaGrams}g per pizza, ${result.sauce.totalGrams}g in totale.`
         : `Prepare the sauce: ${result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, copy.en)}. Use about ${result.sauce.perPizzaGrams}g per pizza, ${result.sauce.totalGrams}g total.`
     );
 
@@ -2185,6 +2400,12 @@ function getMethodSteps(
           ? `Backen mit ${bakeWindow}, bis der Kastenlaib gleichmäßig gebräunt ist. Danach aus der Form nehmen und vor dem Schneiden vollständig auskühlen lassen.`
           : `Den Laib einschneiden und mit ${bakeWindow} backen. Zu Beginn Dampf geben oder abdecken, dann ausbacken und vor dem Schneiden vollständig auskühlen lassen.`
         : `Backen mit ${bakeWindow}, bis Boden und Rand sauber ausgebacken sind und die Oberfläche die gewünschte Farbe hat.`
+      : locale === "it"
+        ? loafWorkflow
+          ? tinLoaf
+            ? `Cuoci ${bakeWindow} finché il pane in cassetta è ben dorato. Toglilo dallo stampo e lascialo raffreddare completamente prima di tagliarlo.`
+            : `Incidi il filone e cuoci ${bakeWindow}. Parti con vapore o coperchio, termina la cottura e fai raffreddare completamente prima di tagliare.`
+          : `Cuoci ${bakeWindow} finché il fondo è croccante e la superficie è ben colorita.`
       : loafWorkflow
         ? tinLoaf
           ? `Bake with ${bakeWindow} until the pan loaf is evenly browned. De-pan and cool completely before slicing.`
@@ -2393,11 +2614,14 @@ export function App() {
   const localizedYeastOptions = useMemo(() => getYeastOptions(settings.language), [settings.language]);
   const prefermentMode = getPrefermentMode(normalizedInput);
   const naturalStarterSelected = isNaturalStarterPreferment(normalizedInput);
+  const naturalStarterChoice = getNaturalStarterChoice(normalizedInput);
   const prefermentName = getPrefermentDisplayName(normalizedInput, settings.language);
   const prefermentFlourGrams = prefermentMode === "none" ? 0 : (result.ingredients.prefermentFlour ?? 0);
   const mainDoughFlourGrams = prefermentMode === "none" ? 0 : (result.ingredients.mainFlour ?? 0);
   const mainDoughWaterGrams = prefermentMode === "none" ? 0 : (result.ingredients.mainWater ?? 0);
   const mainDoughYeastGrams = prefermentMode === "none" ? 0 : (result.ingredients.mainYeast ?? 0);
+  const prefermentSplitText = `${prefermentName}: ${normalizedInput.preferment.flourPercent}% = ${prefermentFlourGrams}g ${t.flour.toLowerCase()}, ${result.ingredients.prefermentWater}g ${t.water.toLowerCase()}, ${result.ingredients.prefermentYeast}g ${t.yeast.toLowerCase()}`;
+  const mainDoughAdditionsText = `${t.mainDoughAdditions}: ${mainDoughFlourGrams}g ${t.additionalFlour}, ${mainDoughWaterGrams}g ${t.additionalWater}${mainDoughYeastGrams > 0 ? `, ${mainDoughYeastGrams}g ${t.additionalYeast}` : ""}`;
   const activeStyle = result.style;
   const loafWorkflow = isLoafStyleId(activeStyle.id);
   const tinLoaf = isTinLoafStyleId(activeStyle.id);
@@ -2559,38 +2783,38 @@ export function App() {
       })),
     [settings.sizeUnit, sizePreset]
   );
-  const blendTotal = useMemo(
-    () => normalizedInput.flourBlend.reduce((sum, item) => sum + item.percentage, 0),
-    [normalizedInput.flourBlend]
+  const prefermentBlendTotal = useMemo(
+    () => normalizedInput.prefermentFlourBlend.reduce((sum, item) => sum + item.percentage, 0),
+    [normalizedInput.prefermentFlourBlend]
   );
+  const mainDoughBlendTotal = useMemo(
+    () => normalizedInput.mainDoughFlourBlend.reduce((sum, item) => sum + item.percentage, 0),
+    [normalizedInput.mainDoughFlourBlend]
+  );
+  const prefermentBlendBreakdown = useMemo<StageBlendBreakdownRow[]>(() => {
+    if (!normalizedInput.flourBlendEnabled || prefermentMode === "none") return [];
+    return buildStageBlendBreakdown(normalizedInput.prefermentFlourBlend, prefermentFlourGrams);
+  }, [normalizedInput.flourBlendEnabled, normalizedInput.prefermentFlourBlend, prefermentFlourGrams, prefermentMode]);
+  const mainDoughBlendBreakdown = useMemo<StageBlendBreakdownRow[]>(() => {
+    if (!normalizedInput.flourBlendEnabled) return [];
+    const targetFlourGrams = prefermentMode === "none" ? result.ingredients.totalFlour : mainDoughFlourGrams;
+    return buildStageBlendBreakdown(normalizedInput.mainDoughFlourBlend, targetFlourGrams);
+  }, [
+    mainDoughFlourGrams,
+    normalizedInput.flourBlendEnabled,
+    normalizedInput.mainDoughFlourBlend,
+    prefermentMode,
+    result.ingredients.totalFlour
+  ]);
   const blendBreakdown = useMemo<BlendBreakdownRow[]>(() => {
     if (!normalizedInput.flourBlendEnabled) return [];
 
-    const totalGrams = allocateBlendGrams(normalizedInput.flourBlend, result.ingredients.totalFlour);
-    const prefermentGrams =
-      prefermentMode === "none"
-        ? normalizedInput.flourBlend.map(() => 0)
-        : allocateBlendGrams(normalizedInput.flourBlend, prefermentFlourGrams);
-    const mainGrams =
-      prefermentMode === "none"
-        ? normalizedInput.flourBlend.map(() => 0)
-        : allocateBlendGrams(normalizedInput.flourBlend, mainDoughFlourGrams);
-
-    return normalizedInput.flourBlend.map((item, index) => ({
-      flourId: item.flourId,
-      percentage: item.percentage,
-      flourLabel: getFlourLabel(item.flourId),
-      totalGrams: totalGrams[index] ?? 0,
-      prefermentGrams: prefermentGrams[index] ?? 0,
-      mainDoughGrams: mainGrams[index] ?? 0
-    }));
+    return mergeBlendBreakdowns(normalizedInput.flourBlend, prefermentBlendBreakdown, mainDoughBlendBreakdown);
   }, [
-    mainDoughFlourGrams,
+    mainDoughBlendBreakdown,
     normalizedInput.flourBlend,
     normalizedInput.flourBlendEnabled,
-    prefermentFlourGrams,
-    prefermentMode,
-    result.ingredients.totalFlour
+    prefermentBlendBreakdown
   ]);
 
   useEffect(() => {
@@ -2929,16 +3153,16 @@ export function App() {
     t
   ]);
 
-  const setBlendItem = (index: number, patch: Partial<FlourBlendItem>) => {
+  const setBlendItem = (target: BlendTarget, index: number, patch: Partial<FlourBlendItem>) => {
     setInput((current) => {
       const normalized = normalizeCalculatorInput(current);
-      const updatedBlend = normalized.flourBlend.map((item, itemIndex) =>
+      const updatedBlend = normalized[target].map((item, itemIndex) =>
         itemIndex === index ? { ...item, ...patch } : item
       );
 
       return {
         ...normalized,
-        flourBlend:
+        [target]:
           patch.percentage === undefined
             ? updatedBlend
             : rebalanceBlendPercentages(updatedBlend, index, patch.percentage)
@@ -2946,29 +3170,29 @@ export function App() {
     });
   };
 
-  const addBlendItem = () => {
-    if (normalizedInput.flourBlend.length >= 4) return;
+  const addBlendItem = (target: BlendTarget) => {
+    if (normalizedInput[target].length >= 4) return;
     setInput((current) => {
       const normalized = normalizeCalculatorInput(current);
       const nextBlend = [
-        ...normalized.flourBlend,
+        ...normalized[target],
         { flourId: "caputo-manitoba-oro", percentage: 0 }
       ];
 
       return {
         ...normalized,
-        flourBlend: rebalanceBlendPercentages(nextBlend, nextBlend.length - 1, Math.max(10, Math.round(100 / nextBlend.length)))
+        [target]: rebalanceBlendPercentages(nextBlend, nextBlend.length - 1, Math.max(10, Math.round(100 / nextBlend.length)))
       };
     });
   };
 
-  const removeBlendItem = (index: number) => {
+  const removeBlendItem = (target: BlendTarget, index: number) => {
     setInput((current) => {
       const normalized = normalizeCalculatorInput(current);
       return {
         ...normalized,
-        flourBlend: normalizeBlendAfterRemoval(
-          normalized.flourBlend.filter((_, itemIndex) => itemIndex !== index)
+        [target]: normalizeBlendAfterRemoval(
+          normalized[target].filter((_, itemIndex) => itemIndex !== index)
         )
       };
     });
@@ -3075,9 +3299,7 @@ export function App() {
           : `${t.bake} ${formatTemperature(result.oven.tempF, settings.temperatureUnit)} for ${result.oven.minTime}-${result.oven.maxTime} ${bakeTimeUnit}`
     ];
     if (prefermentMode !== "none") {
-      lines.push(
-        `${prefermentName}: ${normalizedInput.preferment.flourPercent}% = ${prefermentFlourGrams}g ${t.flour.toLowerCase()}; ${t.mainDoughAdditions}: ${mainDoughFlourGrams}g ${t.additionalFlour}, ${mainDoughWaterGrams}g ${t.additionalWater}, ${mainDoughYeastGrams}g ${t.additionalYeast}`
-      );
+      lines.push(`${prefermentSplitText}; ${mainDoughAdditionsText}`);
     }
     if (result.sauce) {
       lines.push(
@@ -3411,19 +3633,35 @@ export function App() {
                 </div>
                 <div className="fieldGrid compact">
                   {naturalStarterSelected ? <Notice tone="notice">{getNaturalStarterUiHint(settings.language)}</Notice> : null}
-                  {!naturalStarterSelected ? (
-                    <SelectField
-                      label={t.yeastType}
-                      value={normalizedInput.yeastType}
-                      onChange={(value) => setPartial({ yeastType: value as YeastType })}
-                    >
-                      {localizedYeastOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </SelectField>
-                  ) : null}
+                  <SelectField
+                    label={t.yeastType}
+                    value={normalizedInput.yeastType}
+                    onChange={(value) =>
+                      setPartial({
+                        yeastType: value as YeastType,
+                        manualYeastPercent: value === "none" ? undefined : normalizedInput.manualYeastPercent
+                      })
+                    }
+                  >
+                    {localizedYeastOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </SelectField>
+                  <SelectField
+                    label={t.naturalStarter}
+                    value={naturalStarterChoice}
+                    onChange={(value) => {
+                      const nextValue = value as NaturalStarterChoice;
+                      if (nextValue === "none" && !naturalStarterSelected) return;
+                      setPreferment(getPrefermentPatch(nextValue));
+                    }}
+                  >
+                    <option value="none">{t.none}</option>
+                    <option value="lievito-madre">{t["lievito-madre"]}</option>
+                    <option value="sauerdough">{t.sauerdough}</option>
+                  </SelectField>
                   <SelectField
                     label={t.mixerType}
                     value={normalizedInput.mixerType}
@@ -3433,19 +3671,17 @@ export function App() {
                     <option value="planetary">Planetary</option>
                     <option value="spiral">Spiral</option>
                   </SelectField>
-                  {!isGuidedMode ? (
+                  {(!isGuidedMode || naturalStarterSelected) && normalizedInput.yeastType !== "none" ? (
                     <>
-                      {!naturalStarterSelected ? (
-                        <Field
-                          label={t.manualYeast}
-                          value={normalizedInput.manualYeastPercent ?? ""}
-                          suffix="%"
-                          step={0.01}
-                          onChange={(value) =>
-                            setPartial({ manualYeastPercent: value === "" ? undefined : numberValue(value) })
-                          }
-                        />
-                      ) : null}
+                      <Field
+                        label={t.manualYeast}
+                        value={normalizedInput.manualYeastPercent ?? ""}
+                        suffix="%"
+                        step={0.01}
+                        onChange={(value) =>
+                          setPartial({ manualYeastPercent: value === "" ? undefined : numberValue(value) })
+                        }
+                      />
                       <Field
                         label={t.flourTemp}
                         value={displayTemperatureValue(
@@ -3563,6 +3799,23 @@ export function App() {
                         suffix="%"
                         onChange={(value) => setPreferment({ bigaHydration: numberValue(value, 55) })}
                       />
+                      {naturalStarterSelected ? (
+                        <Field
+                          label={t.starterInoculation}
+                          value={normalizedInput.preferment.starterInoculationPercent}
+                          suffix="%"
+                          min={1}
+                          max={100}
+                          onChange={(value) =>
+                            setPreferment({
+                              starterInoculationPercent: numberValue(
+                                value,
+                                getDefaultStarterInoculationPercent(prefermentMode)
+                              )
+                            })
+                          }
+                        />
+                      ) : null}
                       <Field
                         label={t.prefermentRoom}
                         value={normalizedInput.preferment.roomHours}
@@ -3578,30 +3831,86 @@ export function App() {
                       <p className="sectionMeta fieldMeta">
                         {normalizedInput.preferment.flourPercent}% = {prefermentFlourGrams}g {t.flour.toLowerCase()} {t.inPreferment}
                       </p>
-                      <p className="sectionMeta fieldMeta">
-                        {t.mainDoughAdditions}: {mainDoughFlourGrams}g {t.additionalFlour}, {mainDoughWaterGrams}g {t.additionalWater}
-                        {isNaturalStarterPreferment(normalizedInput) ? "" : `, ${mainDoughYeastGrams}g ${t.additionalYeast}`}
-                      </p>
+                      <p className="sectionMeta fieldMeta">{mainDoughAdditionsText}</p>
                     </div>
                   ) : null}
 
                   {normalizedInput.flourBlendEnabled ? (
                     <div className="blendList">
-                      <p className="sectionMeta">
-                        {t.blendTotal}: {blendTotal}%
-                      </p>
-                      {normalizedInput.flourBlend.map((item, index) => {
-                        const breakdown = blendBreakdown[index];
-                        const flourSelectLabel = `${t.flour} ${index + 1}`;
-                        const flourPercentLabel = `${t.flourBlend} % ${index + 1}`;
+                      {prefermentMode !== "none" ? (
+                        <>
+                          <div className="panelMetaRow">
+                            <strong>{prefermentName}</strong>
+                            <span className="sectionMeta">
+                              {t.blendTotal}: {prefermentBlendTotal}% · {prefermentFlourGrams}g
+                            </span>
+                          </div>
+                          {normalizedInput.prefermentFlourBlend.map((item, index) => {
+                            const breakdown = prefermentBlendBreakdown[index];
+                            const flourSelectLabel = `${prefermentName} ${t.flour.toLowerCase()} ${index + 1}`;
+                            const flourPercentLabel = `${prefermentName} ${t.flourBlend.toLowerCase()} % ${index + 1}`;
+
+                            return (
+                              <div className="blendRow" key={`preferment-${item.flourId}-${index}`}>
+                                <select
+                                  aria-label={flourSelectLabel}
+                                  title={flourSelectLabel}
+                                  value={item.flourId}
+                                  onChange={(event) => setBlendItem("prefermentFlourBlend", index, { flourId: event.target.value })}
+                                >
+                                  {FLOURS.map((flour) => (
+                                    <option key={flour.id} value={flour.id}>
+                                      {flour.brand} {flour.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <input
+                                  aria-label={flourPercentLabel}
+                                  title={flourPercentLabel}
+                                  type="number"
+                                  value={item.percentage}
+                                  min={0}
+                                  max={100}
+                                  onChange={(event) =>
+                                    setBlendItem("prefermentFlourBlend", index, { percentage: numberValue(event.target.value) })
+                                  }
+                                />
+                                <button
+                                  className="iconButton"
+                                  type="button"
+                                  onClick={() => removeBlendItem("prefermentFlourBlend", index)}
+                                  aria-label="Remove flour"
+                                >
+                                  x
+                                </button>
+                                {breakdown ? <p className="sectionMeta blendMeta">{breakdown.grams}g {t.inPreferment}</p> : null}
+                              </div>
+                            );
+                          })}
+                          <button className="ghostButton" type="button" onClick={() => addBlendItem("prefermentFlourBlend")}>
+                            {t.addFlour}
+                          </button>
+                        </>
+                      ) : null}
+
+                      <div className="panelMetaRow">
+                        <strong>{prefermentMode === "none" ? t.flourBlend : t.mainDoughAdditions}</strong>
+                        <span className="sectionMeta">
+                          {t.blendTotal}: {mainDoughBlendTotal}% · {prefermentMode === "none" ? result.ingredients.totalFlour : mainDoughFlourGrams}g
+                        </span>
+                      </div>
+                      {normalizedInput.mainDoughFlourBlend.map((item, index) => {
+                        const breakdown = mainDoughBlendBreakdown[index];
+                        const flourSelectLabel = `${t.mainDoughAdditions} ${t.flour.toLowerCase()} ${index + 1}`;
+                        const flourPercentLabel = `${t.mainDoughAdditions} ${t.flourBlend.toLowerCase()} % ${index + 1}`;
 
                         return (
-                          <div className="blendRow" key={`${item.flourId}-${index}`}>
+                          <div className="blendRow" key={`main-${item.flourId}-${index}`}>
                             <select
                               aria-label={flourSelectLabel}
                               title={flourSelectLabel}
                               value={item.flourId}
-                              onChange={(event) => setBlendItem(index, { flourId: event.target.value })}
+                              onChange={(event) => setBlendItem("mainDoughFlourBlend", index, { flourId: event.target.value })}
                             >
                               {FLOURS.map((flour) => (
                                 <option key={flour.id} value={flour.id}>
@@ -3616,28 +3925,27 @@ export function App() {
                               value={item.percentage}
                               min={0}
                               max={100}
-                              onChange={(event) => setBlendItem(index, { percentage: numberValue(event.target.value) })}
+                              onChange={(event) =>
+                                setBlendItem("mainDoughFlourBlend", index, { percentage: numberValue(event.target.value) })
+                              }
                             />
                             <button
                               className="iconButton"
                               type="button"
-                              onClick={() => removeBlendItem(index)}
+                              onClick={() => removeBlendItem("mainDoughFlourBlend", index)}
                               aria-label="Remove flour"
                             >
                               x
                             </button>
                             {breakdown ? (
                               <p className="sectionMeta blendMeta">
-                                {breakdown.totalGrams}g {t.totalLabel}
-                                {prefermentMode !== "none"
-                                  ? `, ${breakdown.prefermentGrams}g ${prefermentName}, ${breakdown.mainDoughGrams}g ${t.mainDoughAdditions.toLowerCase()}`
-                                  : ""}
+                                {breakdown.grams}g {prefermentMode === "none" ? t.totalLabel : t.mainDoughAdditions.toLowerCase()}
                               </p>
                             ) : null}
                           </div>
                         );
                       })}
-                      <button className="ghostButton" type="button" onClick={addBlendItem}>
+                      <button className="ghostButton" type="button" onClick={() => addBlendItem("mainDoughFlourBlend")}>
                         {t.addFlour}
                       </button>
                     </div>
@@ -4061,10 +4369,7 @@ export function App() {
                   prefermentMode !== "none"
                     ? {
                         title: t.prefermentSplit,
-                        lines: [
-                          `${prefermentName}: ${normalizedInput.preferment.flourPercent}% = ${prefermentFlourGrams}g ${t.flour.toLowerCase()}, ${result.ingredients.prefermentWater}g ${t.water.toLowerCase()}, ${result.ingredients.prefermentYeast}g ${t.yeast.toLowerCase()}`,
-                          `${t.mainDoughAdditions}: ${mainDoughFlourGrams}g ${t.additionalFlour}, ${mainDoughWaterGrams}g ${t.additionalWater}, ${mainDoughYeastGrams}g ${t.additionalYeast}`
-                        ]
+                        lines: [prefermentSplitText, mainDoughAdditionsText]
                       }
                     : undefined
                 }
@@ -4523,14 +4828,8 @@ export function App() {
           {prefermentMode !== "none" ? (
             <div className="printCallout">
               <strong>{t.prefermentSplit}</strong>
-              <span>
-                {prefermentName}: {normalizedInput.preferment.flourPercent}% = {prefermentFlourGrams}g {t.flour.toLowerCase()}, {result.ingredients.prefermentWater}g{" "}
-                {t.water.toLowerCase()}, {result.ingredients.prefermentYeast}g {t.yeast.toLowerCase()}
-              </span>
-              <span>
-                {t.mainDoughAdditions}: {mainDoughFlourGrams}g {t.additionalFlour}, {mainDoughWaterGrams}g {t.additionalWater}, {mainDoughYeastGrams}g{" "}
-                {t.additionalYeast}
-              </span>
+              <span>{prefermentSplitText}</span>
+              <span>{mainDoughAdditionsText}</span>
             </div>
           ) : null}
         </section>

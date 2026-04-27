@@ -187,6 +187,66 @@ describe("calculateDough", () => {
     expect(result.waterTemperature.note).toBeUndefined();
   });
 
+  it("allows hybrid sourdough plus commercial yeast when manual yeast is set", () => {
+    const input = createDefaultInput(STYLE_IDS.NEW_YORK);
+    input.preferment.kind = "biga";
+    input.preferment.bigaStyle = "sauerdough";
+    input.yeastType = "ady";
+    input.manualYeastPercent = 0.2;
+
+    const result = calculateDough(input);
+
+    expect(result.ingredients.prefermentYeast).toBeGreaterThan(0);
+    expect(result.ingredients.mainYeast).toBeGreaterThan(0);
+    expect(result.ingredients.totalYeast).toBe(result.ingredients.mainYeast);
+    expect(result.waterTemperature.adyProofing).toBeDefined();
+  });
+
+  it("treats yeast type none as no commercial yeast", () => {
+    const input = createDefaultInput(STYLE_IDS.NEW_YORK);
+    input.preferment.kind = "biga";
+    input.preferment.bigaStyle = "sauerdough";
+    input.yeastType = "none";
+    input.manualYeastPercent = 0.2;
+
+    const result = calculateDough(input);
+
+    expect(result.ingredients.prefermentYeast).toBeGreaterThan(0);
+    expect(result.ingredients.mainYeast).toBe(0);
+    expect(result.ingredients.totalYeast).toBe(0);
+    expect(result.waterTemperature.adyProofing).toBeUndefined();
+  });
+
+  it("uses the configured starter inoculation for natural starter preferments", () => {
+    const input = createDefaultInput(STYLE_IDS.NEW_YORK);
+    input.preferment.kind = "biga";
+    input.preferment.bigaStyle = "lievito-madre";
+    input.preferment.flourPercent = 35;
+    input.preferment.starterInoculationPercent = 60;
+
+    const result = calculateDough(input);
+
+    expect(result.ingredients.prefermentFlour).toBeDefined();
+    expect(result.ingredients.prefermentYeast).toBe(
+      Math.max(1, Math.round(((result.ingredients.prefermentFlour ?? 0) * 60)) / 100)
+    );
+  });
+
+  it("supports separate preferment and main-dough flour blends", () => {
+    const input = createDefaultInput(STYLE_IDS.NEW_YORK);
+    input.preferment.kind = "poolish";
+    input.preferment.flourPercent = 40;
+    input.flourBlend = [{ flourId: "king-arthur-bread", percentage: 100 }];
+    input.prefermentFlourBlend = [{ flourId: "plain-flour", percentage: 100 }];
+    input.mainDoughFlourBlend = [{ flourId: "all-trumps", percentage: 100 }];
+
+    const result = calculateDough(input);
+
+    expect(result.flourBlend.blendedW).toBe(314);
+    expect(result.flourBlend.description).toContain("Plain / AP Flour");
+    expect(result.flourBlend.description).toContain("All Trumps");
+  });
+
   it("analyzes weak flour for long high-hydration ferments", () => {
     const input = createDefaultInput(STYLE_IDS.ROMAN);
     input.flourBlend = [{ flourId: "plain-flour", percentage: 100 }];

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 - 2026-04-27
+
+- Split flour blending by stage so preferments and main dough can use different flour mixes without breaking older saved recipes that still rely on the legacy shared blend
+- Allowed hybrid natural-starter doughs by keeping manual commercial yeast available alongside `Lievito madre` and `Sourdough` instead of forcing those modes to be starter-only
+- Added starter inoculation controls for natural-starter preferments so bakers can tune preferment strength directly in Dough Studio
+- Updated recipe summaries, print sheets, sharing text, and flour breakdowns so the app explains preferment splits and main-dough additions more clearly
+- Finished Italian method localization, including sauce instructions, so the full workflow now stays in Italian when that locale is selected
+- Added calculator and normalization regression coverage for stage-specific flour blends, hybrid leavening, starter inoculation, and older input compatibility
+
 ## 0.4.0 - 2026-04-27
 
 - Added Italian as a full app language, including Italian recipe naming, planner copy, settings labels, and bread/fermentation profile content

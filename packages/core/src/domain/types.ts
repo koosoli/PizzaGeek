@@ -1,4 +1,4 @@
-export type YeastType = "idy" | "ady" | "fresh";
+export type YeastType = "none" | "idy" | "ady" | "fresh";
 export type MixerType = "hand" | "planetary" | "spiral";
 export type OvenType =
   | "wood-fired"
@@ -95,6 +95,7 @@ export interface PrefermentOptions {
   flourPercent: number;
   bigaHydration: number;
   bigaStyle: BigaStyle;
+  starterInoculationPercent: number;
   roomHours: number;
   coldHours: number;
 }
@@ -170,6 +171,8 @@ export interface CalculatorInput {
   preferment: PrefermentOptions;
   flourBlendEnabled: boolean;
   flourBlend: FlourBlendItem[];
+  prefermentFlourBlend: FlourBlendItem[];
+  mainDoughFlourBlend: FlourBlendItem[];
   pan: PanOptions;
   oven: OvenOptions;
   sauce: SauceOptions;
