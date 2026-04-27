@@ -157,6 +157,36 @@ describe("calculateDough", () => {
     expect(result.ingredients.mainYeast).toBeGreaterThan(0);
   });
 
+  it("keeps lievito madre and sauerdough labels distinct in schedules", () => {
+    const lievitoMadreInput = createDefaultInput(STYLE_IDS.NEW_YORK);
+    lievitoMadreInput.preferment.kind = "biga";
+    lievitoMadreInput.preferment.bigaStyle = "lievito-madre";
+
+    const sauerdoughInput = createDefaultInput(STYLE_IDS.NEW_YORK);
+    sauerdoughInput.preferment.kind = "biga";
+    sauerdoughInput.preferment.bigaStyle = "sauerdough";
+
+    const lievitoMadrePlan = buildBakePlan(lievitoMadreInput, "starting-now", new Date("2026-04-26T10:00:00"));
+    const sauerdoughPlan = buildBakePlan(sauerdoughInput, "starting-now", new Date("2026-04-26T10:00:00"));
+
+    expect(lievitoMadrePlan[0]?.label).toBe("Mix Lievito madre");
+    expect(sauerdoughPlan[0]?.label).toBe("Mix Sourdough");
+  });
+
+  it("does not add extra final-dough yeast for natural starter preferments", () => {
+    const input = createDefaultInput(STYLE_IDS.NEW_YORK);
+    input.preferment.kind = "biga";
+    input.preferment.bigaStyle = "sauerdough";
+    input.yeastType = "ady";
+
+    const result = calculateDough(input);
+
+    expect(result.ingredients.prefermentYeast).toBeGreaterThan(0);
+    expect(result.ingredients.mainYeast).toBe(0);
+    expect(result.waterTemperature.adyProofing).toBeUndefined();
+    expect(result.waterTemperature.note).toBeUndefined();
+  });
+
   it("analyzes weak flour for long high-hydration ferments", () => {
     const input = createDefaultInput(STYLE_IDS.ROMAN);
     input.flourBlend = [{ flourId: "plain-flour", percentage: 100 }];

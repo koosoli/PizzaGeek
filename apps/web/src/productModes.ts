@@ -50,8 +50,8 @@ export function getBreadProfiles(locale: LocaleCode): BreadProfile[] {
         styleId: STYLE_IDS.FOCACCIA,
         title: "Focaccia",
         kicker: "Blechbrot",
-        description: "Luftig, oelreich und auf Blech oder in der Form zuhause.",
-        note: "Sehr stark fuer Blech, Form und olivenoelbetonte Teige.",
+        description: "Luftig, ölreich und auf Blech oder in der Form zuhause.",
+        note: "Sehr stark für Blech, Form und olivenölbetonte Teige.",
         tags: ["78% Hydration", "12h Zielgare", "Blech / Form"]
       },
       {
@@ -59,8 +59,8 @@ export function getBreadProfiles(locale: LocaleCode): BreadProfile[] {
         styleId: STYLE_IDS.COUNTRY_LOAF,
         title: "Country Loaf",
         kicker: "Freigeschobener Laib",
-        description: "Freigeschobener Laib mit offener Krume, Dampfstart und kraeftiger Kruste.",
-        note: "Passt fuer Banneton-, Dampf- und Sauerteig-nahe Ablaufe mit Hefeteig.",
+        description: "Freigeschobener Laib mit offener Krume, Dampfstart und kräftiger Kruste.",
+        note: "Passt für Banneton-, Dampf- und Sauerteig-nahe Abläufe mit Hefeteig.",
         tags: ["74% Hydration", "18h Zielgare", "Herdlaib"]
       },
       {
@@ -68,17 +68,17 @@ export function getBreadProfiles(locale: LocaleCode): BreadProfile[] {
         styleId: STYLE_IDS.SANDWICH_LOAF,
         title: "Sandwich Loaf",
         kicker: "Kastenbrot",
-        description: "Weicher Kastenlaib fuer Scheiben, Toast und alltagstaugliche Sandwichbrote.",
-        note: "Nutzt Formgeometrie und eine sanftere Backkurve fuer Kastenbrote.",
+        description: "Weicher Kastenlaib für Scheiben, Toast und alltagstaugliche Sandwichbrote.",
+        note: "Nutzt Formgeometrie und eine sanftere Backkurve für Kastenbrote.",
         tags: ["68% Hydration", "12h Zielgare", "Kastenform"]
       },
       {
         id: "ciabatta",
         styleId: STYLE_IDS.CIABATTA,
         title: "Ciabatta",
-        kicker: "Schlanke Brote / Stuecke",
-        description: "Sehr feuchte, gefaltete Teiglinge mit offener Krume und duenn bemehlter Kruste.",
-        note: "Ideal fuer Stretch-and-Fold, weiche Teigfuehrung und rustikale Sandwiches.",
+        kicker: "Schlanke Brote / Stücke",
+        description: "Sehr feuchte, gefaltete Teiglinge mit offener Krume und dünn bemehlter Kruste.",
+        note: "Ideal für Stretch-and-Fold, weiche Teigführung und rustikale Sandwiches.",
         tags: ["78% Hydration", "18h Zielgare", "Freigeschoben"]
       },
       {
@@ -86,8 +86,8 @@ export function getBreadProfiles(locale: LocaleCode): BreadProfile[] {
         styleId: STYLE_IDS.SEMOLINA_LOAF,
         title: "Semolina Loaf",
         kicker: "Durum-Laib",
-        description: "Goldgelber Laib mit feiner Griesnote, elastischer Krume und klarer Schnittfuehrung.",
-        note: "Stark fuer Sesam, Hartweizengriess und goldene Krustenfarben.",
+        description: "Goldgelber Laib mit feiner Grießnote, elastischer Krume und klarer Schnittführung.",
+        note: "Stark für Sesam, Hartweizengrieß und goldene Krustenfarben.",
         tags: ["70% Hydration", "18h Zielgare", "Herdlaib"]
       },
       {
@@ -95,8 +95,8 @@ export function getBreadProfiles(locale: LocaleCode): BreadProfile[] {
         styleId: STYLE_IDS.MILK_BREAD,
         title: "Milk Bread",
         kicker: "Weicher Pullman-Stil",
-        description: "Flauschiger, leicht suesser Kastenlaib fuer Toast, Sandwiches und weiche Brotscheiben.",
-        note: "Gut fuer alltagstaugliche Brote mit zarter Kruste und pull-apart Krume.",
+        description: "Flauschiger, leicht süßer Kastenlaib für Toast, Sandwiches und weiche Brotscheiben.",
+        note: "Gut für alltagstaugliche Brote mit zarter Kruste und pull-apart Krume.",
         tags: ["66% Hydration", "10h Zielgare", "Kastenform"]
       },
       {
@@ -104,17 +104,17 @@ export function getBreadProfiles(locale: LocaleCode): BreadProfile[] {
         styleId: STYLE_IDS.WHOLE_GRAIN_HEARTH,
         title: "Whole Grain Hearth",
         kicker: "Rustikaler Vollkornlaib",
-        description: "Mehr Vollkornaroma, etwas kraeftigerer Biss und stabile Gare fuer herzhafte Laibe.",
-        note: "Praktisch fuer taegliche Brote mit mehr Aroma, Farbe und Saatenoptionen.",
+        description: "Mehr Vollkornaroma, etwas kräftigerer Biss und stabile Gare für herzhafte Laibe.",
+        note: "Praktisch für tägliche Brote mit mehr Aroma, Farbe und Saatenoptionen.",
         tags: ["73% Hydration", "20h Zielgare", "Herdlaib"]
       },
       {
         id: "schiacciata",
         styleId: STYLE_IDS.SCHIACCIATA,
         title: "Schiacciata",
-        kicker: "Duennes Blechbrot",
-        description: "Flacher als Focaccia, knuspriger im Rand und sehr stark fuer belegte Scheiben.",
-        note: "Hilfreich fuer Lunch-Brote, gefuellte Scheiben und knackige Olivenoel-Teige.",
+        kicker: "Dünnes Blechbrot",
+        description: "Flacher als Focaccia, knuspriger im Rand und sehr stark für belegte Scheiben.",
+        note: "Hilfreich für Lunch-Brote, gefüllte Scheiben und knackige Olivenöl-Teige.",
         tags: ["72% Hydration", "12h Zielgare", "Blech / Form"]
       },
       {
@@ -122,18 +122,113 @@ export function getBreadProfiles(locale: LocaleCode): BreadProfile[] {
         styleId: STYLE_IDS.COCA,
         title: "Coca",
         kicker: "Mediterranes Fladenbrot",
-        description: "Olivenoel-Fladenbrot mit knusprigem Rand und zarter Mitte.",
-        note: "Gut fuer Gemuese, Zwiebeln und herzhafte Blechbrote.",
+        description: "Olivenöl-Fladenbrot mit knusprigem Rand und zarter Mitte.",
+        note: "Gut für Gemüse, Zwiebeln und herzhafte Blechbrote.",
         tags: ["62% Hydration", "2h Zielgare", "Fladenbrot"]
       },
       {
         id: "flammkuchen-flatbread",
         styleId: STYLE_IDS.FLAMMKUCHEN,
         title: "Flammkuchen",
-        kicker: "Sehr duennes Fladenbrot",
-        description: "Sehr duennes Fladenbrot fuer schnelle, heisse Backe.",
-        note: "Praktisch fuer knusprige Flatbreads und schnelle Tests.",
+        kicker: "Sehr dünnes Fladenbrot",
+        description: "Sehr dünnes Fladenbrot für schnelle, heiße Backe.",
+        note: "Praktisch für knusprige Flatbreads und schnelle Tests.",
         tags: ["55% Hydration", "2h Zielgare", "Fladenbrot"]
+      }
+    ];
+  }
+
+  if (locale === "it") {
+    return [
+      {
+        id: "focaccia-pan",
+        styleId: STYLE_IDS.FOCACCIA,
+        title: "Focaccia",
+        kicker: "Pane in teglia",
+        description: "Impasto arioso e ricco d'olio, perfetto in teglia o nello stampo.",
+        note: "Ottimo per teglie, stampi e impasti ricchi di olio d'oliva.",
+        tags: ["78% idratazione", "12h target", "Teglia / stampo"]
+      },
+      {
+        id: "country-loaf",
+        styleId: STYLE_IDS.COUNTRY_LOAF,
+        title: "Country Loaf",
+        kicker: "Pagnotta da forno",
+        description: "Pagnotta libera con mollica aperta, vapore iniziale e crosta croccante.",
+        note: "Pensata per banneton, incisione e una cottura con vapore all'inizio.",
+        tags: ["74% idratazione", "18h target", "Pagnotta"]
+      },
+      {
+        id: "sandwich-loaf",
+        styleId: STYLE_IDS.SANDWICH_LOAF,
+        title: "Sandwich Loaf",
+        kicker: "Pane in cassetta",
+        description: "Filone morbido da stampo per fette, toast e sandwich quotidiani.",
+        note: "Usa la geometria dello stampo e una curva di cottura più dolce.",
+        tags: ["68% idratazione", "12h target", "Stampo"]
+      },
+      {
+        id: "ciabatta",
+        styleId: STYLE_IDS.CIABATTA,
+        title: "Ciabatta",
+        kicker: "Filoni / pezzi rustici",
+        description: "Pezzi di impasto molto idratato con mollica aperta e crosta leggermente infarinata.",
+        note: "Ideale per pieghe, forza delicata e sandwich rustici.",
+        tags: ["78% idratazione", "18h target", "Impasto piegato"]
+      },
+      {
+        id: "semolina-loaf",
+        styleId: STYLE_IDS.SEMOLINA_LOAF,
+        title: "Semolina Loaf",
+        kicker: "Pagnotta di semola",
+        description: "Pagnotta dorata con nota di semola, mollica elastica e taglio pulito.",
+        note: "Molto adatta a sesamo, miscele di grano duro e croste dorate.",
+        tags: ["70% idratazione", "18h target", "Forno"]
+      },
+      {
+        id: "milk-bread",
+        styleId: STYLE_IDS.MILK_BREAD,
+        title: "Milk Bread",
+        kicker: "Filone soffice",
+        description: "Pane morbido e leggermente dolce per toast, sandwich e fette soffici.",
+        note: "Ideale per pani da tutti i giorni con crosta tenera.",
+        tags: ["66% idratazione", "10h target", "Stampo"]
+      },
+      {
+        id: "whole-grain-hearth",
+        styleId: STYLE_IDS.WHOLE_GRAIN_HEARTH,
+        title: "Whole Grain Hearth",
+        kicker: "Pagnotta integrale",
+        description: "Più aroma di cereale, morso più deciso e fermentazione stabile.",
+        note: "Pratica per pani quotidiani con più gusto, colore e semi.",
+        tags: ["73% idratazione", "20h target", "Pagnotta"]
+      },
+      {
+        id: "schiacciata",
+        styleId: STYLE_IDS.SCHIACCIATA,
+        title: "Schiacciata",
+        kicker: "Pane sottile in teglia",
+        description: "Più bassa della focaccia, croccante ai bordi e forte sulle fette farcite.",
+        note: "Utile per pranzi, fette ripiene e impasti croccanti all'olio.",
+        tags: ["72% idratazione", "12h target", "Teglia"]
+      },
+      {
+        id: "coca-flatbread",
+        styleId: STYLE_IDS.COCA,
+        title: "Coca",
+        kicker: "Pane piatto mediterraneo",
+        description: "Pane piatto all'olio con bordo croccante e centro tenero.",
+        note: "Ottimo con verdure, cipolle e cotture salate in teglia.",
+        tags: ["62% idratazione", "2h target", "Pane piatto"]
+      },
+      {
+        id: "flammkuchen-flatbread",
+        styleId: STYLE_IDS.FLAMMKUCHEN,
+        title: "Flammkuchen",
+        kicker: "Pane piatto sottilissimo",
+        description: "Pane molto sottile per cotture rapide e molto calde.",
+        note: "Pratico per flatbread croccanti e test veloci.",
+        tags: ["55% idratazione", "2h target", "Pane piatto"]
       }
     ];
   }

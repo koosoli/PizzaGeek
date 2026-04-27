@@ -83,7 +83,7 @@ import {
   isTinLoafStyleId,
   type ProductMode
 } from "./productModes";
-type PrefermentMode = "none" | "poolish" | "biga" | "tiga" | "bassinage";
+type PrefermentMode = "none" | "poolish" | "biga" | "tiga" | "lievito-madre" | "sauerdough";
 
 type QualitySignal = {
   label: string;
@@ -158,7 +158,9 @@ const DEFAULT_PANEL_STATE: Record<PanelKey, boolean> = {
 
 function getDefaultRecipeName(styleId: string, locale: LocaleCode) {
   const styleName = getStyleById(styleId)?.name ?? "Pizza";
-  return `${styleName} ${locale === "de" ? "Teig" : "dough"}`;
+  if (locale === "de") return `${styleName} Teig`;
+  if (locale === "it") return `${styleName} impasto`;
+  return `${styleName} dough`;
 }
 
 function isAutoRecipeName(name: string, styleId: string) {
@@ -172,9 +174,15 @@ function getRecipeDisplayName(recipeName: string, styleId: string, locale: Local
 }
 
 function getPortableDataImportMessage(locale: LocaleCode, recipeCount: number, journalCount: number) {
-  return locale === "de"
-    ? `Backup importiert: ${recipeCount} Rezepte, ${journalCount} Backnotizen.`
-    : `Imported backup: ${recipeCount} recipes, ${journalCount} journal entries.`;
+  if (locale === "de") {
+    return `Backup importiert: ${recipeCount} Rezepte, ${journalCount} Backnotizen.`;
+  }
+
+  if (locale === "it") {
+    return `Backup importato: ${recipeCount} ricette, ${journalCount} note di cottura.`;
+  }
+
+  return `Imported backup: ${recipeCount} recipes, ${journalCount} journal entries.`;
 }
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
@@ -247,6 +255,7 @@ const copy = {
     sizeUnit: "Length unit",
     english: "English",
     german: "Deutsch",
+    italian: "Italiano",
     pizzaProduct: "Pizza",
     breadProduct: "Bread",
     guidedMode: "Guided",
@@ -305,6 +314,8 @@ const copy = {
     biga: "Biga",
     tiga: "Tiga",
     bassinage: "Bassinage",
+    "lievito-madre": "Lievito madre",
+    sauerdough: "Sourdough",
     prefermentFlour: "Preferment flour",
     bigaHydration: "Biga hydration",
     prefermentRoom: "Preferment room",
@@ -319,6 +330,8 @@ const copy = {
     productModeHint: "Pizza keeps the full pizza style library. Bread narrows the app to bread-first profiles instead of pizza assumptions.",
     workspaceHint: "Guided keeps the essentials up front. Switch to Studio for flour blending, costing, saves, and bake logging.",
     guidedStylesHint: "Start with a core style, then use the full library for regional or specialty doughs.",
+    prefermentHint:
+      "Bassinage is a mixing technique, not a preferment. Lievito madre and sourdough use the preferment slot here and replace extra yeast in the final dough.",
     appInstall: "App install",
     appInstallHint: "Install Pizza Geek for faster launch and offline recipe access.",
     installApp: "Install app",
@@ -438,11 +451,11 @@ const copy = {
     brand: "Pizza Geek",
     title: "Teigrechner",
     subtitle:
-      "Stilbewusste Teigberechnung fur ambitionierte Home- und Profi-Pizza, mit klarerer Planung, besserer Backfuhrung und einem deutlich starkeren Rezept-Workflow.",
+      "Stilbewusste Teigberechnung für ambitionierte Home- und Profi-Pizza, mit klarerer Planung, besserer Backführung und einem deutlich stärkeren Rezept-Workflow.",
     subtitleBread:
-      "Brotorientierte Teigplanung fur Focaccia-, Fladenbrot- und Laib-Workflows, mit Gare- und Backhinweisen passend zum Produkt.",
-    resetStyle: "Stil zurucksetzen",
-    resetProfile: "Profil zurucksetzen",
+      "Brotorientierte Teigplanung für Focaccia-, Fladenbrot- und Laib-Workflows, mit Gare- und Backhinweisen passend zum Produkt.",
+    resetStyle: "Stil zurücksetzen",
+    resetProfile: "Profil zurücksetzen",
     printRecipe: "Rezept drucken",
     buySlice: "Pizza spendieren",
     settings: "Einstellungen",
@@ -451,12 +464,13 @@ const copy = {
     productMode: "Produkt",
     workspaceMode: "Arbeitsmodus",
     temperatureUnit: "Temperatur",
-    sizeUnit: "Laengeneinheit",
+    sizeUnit: "Längeneinheit",
     english: "Englisch",
     german: "Deutsch",
+    italian: "Italiano",
     pizzaProduct: "Pizza",
     breadProduct: "Brot",
-    guidedMode: "Gefuehrt",
+    guidedMode: "Geführt",
     studioMode: "Studio",
     variants: "Varianten",
     dark: "Dunkel",
@@ -471,7 +485,7 @@ const copy = {
     ovenProfile: "Ofenprofil",
     planner: "Backplanung",
     formula: "Rezeptblatt",
-    recipeHealth: "Qualitatscheck",
+    recipeHealth: "Qualitätscheck",
     guidance: "Hinweise",
     method: "Ablauf",
     cost: "Zutatenkosten",
@@ -479,13 +493,13 @@ const copy = {
     bakeJournal: "Backjournal",
     doughBalls: "Teiglinge",
     ballWeight: "Teiglingsgewicht",
-    pieces: "Stuecke",
-    pieceWeight: "Stueckgewicht",
+    pieces: "Stücke",
+    pieceWeight: "Stückgewicht",
     loaves: "Laibe",
     loafWeight: "Laibgewicht",
     hydration: "Hydration",
     salt: "Salz",
-    oil: "Oel",
+    oil: "Öl",
     sugar: "Zucker",
     honey: "Honig",
     malt: "Malz",
@@ -497,62 +511,66 @@ const copy = {
     flourTemp: "Mehltemp.",
     roomBulk: "Raumgare",
     cellarTime: "Kellergare",
-    coldBulk: "Kuehl-Stockgare",
-    coldBall: "Kuehl-Stueckgare",
+    coldBulk: "Kühl-Stockgare",
+    coldBall: "Kühl-Stückgare",
     finalRise: "Endgare",
     roomTemp: "Raumtemp.",
     cellarTemp: "Kellertemp.",
-    fridgeTemp: "Kuehlschranktemp.",
+    fridgeTemp: "Kühlschranktemp.",
     roomHumidity: "Raumfeuchte",
     cellarHumidity: "Kellerfeuchte",
-    fridgeHumidity: "Kuehlschrankfeuchte",
+    fridgeHumidity: "Kühlschrankfeuchte",
     prefermentMode: "Vorteig-Stil",
     none: "Keiner",
     poolish: "Poolish",
     biga: "Biga",
     tiga: "Tiga",
     bassinage: "Bassinage",
+    "lievito-madre": "Lievito madre",
+    sauerdough: "Sauerteig",
     prefermentFlour: "Vorteig-Mehl",
     bigaHydration: "Biga-Hydration",
     prefermentRoom: "Vorteig Raum",
     prefermentCold: "Vorteig kalt",
     flourBlend: "Mehlmischung",
-    addFlour: "Mehl hinzufugen",
+    addFlour: "Mehl hinzufügen",
     blendTotal: "Mischung gesamt",
     totalLabel: "gesamt",
     styleLibrary: "Komplette Stilbibliothek",
     breadProfiles: "Brotprofile",
-    breadModeHint: "Der Brotmodus deckt Blechbrote, Fladenbrote und Laibprofile mit brotspezifischer Gare- und Backfuehrung ab.",
-    productModeHint: "Pizza behaelt die volle Pizzastil-Bibliothek. Brot richtet die App auf Brotprofile statt auf Pizza-Annahmen aus.",
-    workspaceHint: "Gefuehrt zeigt zuerst das Wesentliche. Studio oeffnet Mehlmischung, Kosten, Speicher und Backjournal.",
-    guidedStylesHint: "Starte mit einem Kernstil und wechsle fuer regionale oder spezielle Teige in die volle Bibliothek.",
+    breadModeHint: "Der Brotmodus deckt Blechbrote, Fladenbrote und Laibprofile mit brotspezifischer Gare- und Backführung ab.",
+    productModeHint: "Pizza behält die volle Pizzastil-Bibliothek. Brot richtet die App auf Brotprofile statt auf Pizza-Annahmen aus.",
+    workspaceHint: "Geführt zeigt zuerst das Wesentliche. Studio öffnet Mehlmischung, Kosten, Speicher und Backjournal.",
+    guidedStylesHint: "Starte mit einem Kernstil und wechsle für regionale oder spezielle Teige in die volle Bibliothek.",
+    prefermentHint:
+      "Bassinage ist eine Mischtechnik, kein Vorteig. Lievito madre und Sauerteig nutzen hier den Vorteig-Slot und ersetzen zusätzliche Hefe im Hauptteig.",
     appInstall: "App-Installation",
-    appInstallHint: "Installiere Pizza Geek fuer schnelleren Start und Offline-Zugriff auf Rezepte.",
+    appInstallHint: "Installiere Pizza Geek für schnelleren Start und Offline-Zugriff auf Rezepte.",
     installApp: "App installieren",
-    installReady: "Auf diesem Geraet installierbar.",
+    installReady: "Auf diesem Gerät installierbar.",
     installedApp: "Installiert und wie eine App startbar.",
-    installUnavailable: "Installation ist in diesem Browser derzeit nicht verfuegbar.",
+    installUnavailable: "Installation ist in diesem Browser derzeit nicht verfügbar.",
     offlineReady: "Offline-Cache ist nach dem ersten Besuch bereit.",
-    offlinePending: "Offline-Unterstuetzung wird vorbereitet.",
+    offlinePending: "Offline-Unterstützung wird vorbereitet.",
     offlineNow: "Du bist offline. Zwischengespeicherte App-Seiten sollten weiter funktionieren.",
     recipeData: "Rezeptdaten",
-    recipeDataHint: "Verschiebe gespeicherte Rezepte und Backjournal-Eintraege zwischen Geraeten mit einem versionierten JSON-Backup.",
+    recipeDataHint: "Verschiebe gespeicherte Rezepte und Backjournal-Einträge zwischen Geräten mit einem versionierten JSON-Backup.",
     panGeometry: "Blechgeometrie",
     quickWeights: "Schnellgewichte",
-    sizeHint: "Ein Durchmesser setzt ein typisches Teiggewicht fur diesen Stil.",
-    freeformLoafHint: "Freigeschobene Laibe nutzen keine Pizza-Groessen. Straff formen, im Garkorb oder in einer ausgelegten Schuessel gehen lassen, dann einschneiden und mit Dampf backen.",
-    tinLoafHint: "Kastenbrote nutzen die Formmasse oben fuer Gewichtschaetzung und ein ehrliches Backprofil.",
+    sizeHint: "Ein Durchmesser setzt ein typisches Teiggewicht für diesen Stil.",
+    freeformLoafHint: "Freigeschobene Laibe nutzen keine Pizza-Größen. Straff formen, im Garkorb oder in einer ausgelegten Schüssel gehen lassen, dann einschneiden und mit Dampf backen.",
+    tinLoafHint: "Kastenbrote nutzen die Formmaße oben für Gewichtsschätzung und ein ehrliches Backprofil.",
     shape: "Form",
     unit: "Einheit",
     rectangular: "Rechteckig",
     round: "Rund",
     inches: "Zoll",
     centimeters: "Zentimeter",
-    length: "Lange",
+    length: "Länge",
     width: "Breite",
     diameter: "Durchmesser",
     depth: "Tiefe",
-    applyPanWeight: "Blechgewicht ubernehmen",
+    applyPanWeight: "Blechgewicht übernehmen",
     stoneTemp: "Steintemp.",
     topHeat: "Oberhitze",
     deckTemp: "Decktemp.",
@@ -561,7 +579,7 @@ const copy = {
     sauce: "Sauce",
     sauceStyle: "Saucenstil",
     sauceWeight: "Sauce / Pizza",
-    sauceHint: "Fuegt Saucenhinweise im Rezeptblatt und Ablauf hinzu.",
+    sauceHint: "Fügt Saucenhinweise im Rezeptblatt und Ablauf hinzu.",
     sauceClassic: "Klassische Tomate",
     sauceRaw: "Rohe Tomate",
     sauceCooked: "Gekochte Tomate",
@@ -570,17 +588,17 @@ const copy = {
     readyBy: "Fertig bis",
     readyDate: "Fertig am",
     quickSchedule: "Schnellplanung",
-    quickScheduleHint: "Waehle dein Backziel und Pizza Geek plant den Start rueckwaerts fuer dich.",
-    breadQuickScheduleHint: "Waehle dein Brotfenster und Pizza Geek plant Stockgare, Endgare und Backstart passend zum Profil rueckwaerts.",
+    quickScheduleHint: "Wähle dein Backziel und Pizza Geek plant den Start rückwärts für dich.",
+    breadQuickScheduleHint: "Wähle dein Brotfenster und Pizza Geek plant Stockgare, Endgare und Backstart passend zum Profil rückwärts.",
     startAt: "Start",
     todayTarget: "Gleicher Tag",
-    overnightTarget: "Ueber Nacht",
+    overnightTarget: "Über Nacht",
     twoDayTarget: "2 Tage",
     threeDayTarget: "3 Tage",
     rapidTarget: "Schnell",
     breadExpressTarget: "Mischen & Backen",
     breadTodayTarget: "Tageslaib",
-    breadOvernightTarget: "Naechster Morgen",
+    breadOvernightTarget: "Nächster Morgen",
     breadTwoDayTarget: "Mehr Aroma",
     breadThreeDayTarget: "Wochenendlaib",
     flour: "Mehl",
@@ -596,12 +614,12 @@ const copy = {
     mainDough: "Hauptteig",
     inPreferment: "im Vorteig",
     mainDoughAdditions: "Hauptteig-Zugaben",
-    additionalFlour: "zusaetzliches Mehl",
-    additionalWater: "zusaetzliches Wasser",
-    additionalYeast: "zusaetzliche Hefe",
+    additionalFlour: "zusätzliches Mehl",
+    additionalWater: "zusätzliches Wasser",
+    additionalYeast: "zusätzliche Hefe",
     batch: "Charge",
     perDough: "Pro Teigling",
-    perPiece: "Pro Stueck",
+    perPiece: "Pro Stück",
     perLoaf: "Pro Laib",
     recipeName: "Rezeptname",
     save: "Speichern",
@@ -613,43 +631,296 @@ const copy = {
     dataExported: "Rezept-Backup heruntergeladen.",
     dataExportError: "Das Backup konnte nicht heruntergeladen werden.",
     dataImportError: "Diese Datei konnte nicht importiert werden. Nutze ein Pizza-Geek-Backup als JSON.",
-    addPhoto: "Foto hinzufugen",
+    addPhoto: "Foto hinzufügen",
     removePhoto: "Foto entfernen",
     rating: "Bewertung",
     outcome: "Ergebnis",
     notes: "Notizen",
     notesPlaceholder:
-      "Wie lief der Backtag? Krume, Farbe, Formen, Ofenverhalten, nachste Anpassung...",
+      "Wie lief der Backtag? Krume, Farbe, Formen, Ofenverhalten, nächste Anpassung...",
     logBake: "Backen protokollieren",
     keeper: "Bleibt so",
     tweak: "Nachscharfen",
     fail: "Fehlversuch",
     savedCount: "gespeicherte Rezepte",
-    journalCount: "Journaleintrage",
+    journalCount: "Journaleinträge",
     noPhoto: "Noch kein Foto",
     flourCost: "Mehl / kg",
     yeastCost: "Hefe / kg",
-    oilCost: "Oel / kg",
-    currency: "Waehrung",
+    oilCost: "Öl / kg",
+    currency: "Währung",
     hydrationFit: "Hydration",
     saltBalance: "Salzbalance",
     fermentPlan: "Gareplan",
-    flourStrength: "Mehlstarke",
+    flourStrength: "Mehlstärke",
     mixTemperature: "Mischtemperatur",
     advancedSchedule: "Detaillierter Zeitplan",
     sauceRecipeDetails: "Saucenrezept",
     collapseSection: "Bereich einklappen",
     expandSection: "Bereich ausklappen"
+  },
+  it: {
+    brand: "Pizza Geek",
+    title: "Calcolatore Impasti",
+    subtitle:
+      "Calcolo impasti orientato allo stile per una pizza fatta seriamente, con pianificazione più chiara, guida di cottura migliore e un flusso ricette più forte.",
+    subtitleBread:
+      "Pianificazione dell'impasto orientata al pane per focaccia, pani piatti e filoni, con guida di lievitazione e cottura che segue il prodotto.",
+    resetStyle: "Reimposta stile",
+    resetProfile: "Reimposta profilo",
+    printRecipe: "Stampa scheda",
+    buySlice: "Offrimi una fetta",
+    settings: "Impostazioni",
+    theme: "Tema",
+    language: "Lingua",
+    productMode: "Prodotto",
+    workspaceMode: "Workspace",
+    temperatureUnit: "Temperatura",
+    sizeUnit: "Unità lunghezza",
+    english: "English",
+    german: "Deutsch",
+    italian: "Italiano",
+    pizzaProduct: "Pizza",
+    breadProduct: "Pane",
+    guidedMode: "Guidato",
+    studioMode: "Studio",
+    variants: "Varianti",
+    dark: "Scuro",
+    light: "Chiaro",
+    fahrenheit: "Fahrenheit",
+    celsius: "Celsius",
+    styles: "Stili",
+    doughSetup: "Setup impasto",
+    fermentation: "Fermentazione",
+    doughStudio: "Prefermento e farina",
+    bakeSurface: "Forma e cottura",
+    ovenProfile: "Profilo forno",
+    planner: "Pianifica",
+    formula: "Scheda ricetta",
+    recipeHealth: "Controllo qualità",
+    guidance: "Guida",
+    method: "Metodo",
+    cost: "Costi",
+    savedRecipes: "Ricette salvate",
+    bakeJournal: "Diario di cottura",
+    doughBalls: "Panetti",
+    ballWeight: "Peso panetto",
+    pieces: "Pezzi",
+    pieceWeight: "Peso pezzo",
+    loaves: "Pagnotte",
+    loafWeight: "Peso pagnotta",
+    hydration: "Idratazione",
+    salt: "Sale",
+    oil: "Olio",
+    sugar: "Zucchero",
+    honey: "Miele",
+    malt: "Malto",
+    lard: "Strutto",
+    milkPowder: "Latte in polvere",
+    yeastType: "Lievito",
+    mixerType: "Impastatrice",
+    manualYeast: "Lievito manuale",
+    flourTemp: "Temp. farina",
+    roomBulk: "Puntata ambiente",
+    cellarTime: "Cantina",
+    coldBulk: "Puntata frigo",
+    coldBall: "Appretto frigo",
+    finalRise: "Appretto finale",
+    roomTemp: "Temp. ambiente",
+    cellarTemp: "Temp. cantina",
+    fridgeTemp: "Temp. frigo",
+    roomHumidity: "Umidità ambiente",
+    cellarHumidity: "Umidità cantina",
+    fridgeHumidity: "Umidità frigo",
+    prefermentMode: "Stile prefermento",
+    none: "Nessuno",
+    poolish: "Poolish",
+    biga: "Biga",
+    tiga: "Tiga",
+    bassinage: "Bassinage",
+    "lievito-madre": "Lievito madre",
+    sauerdough: "Lievito naturale",
+    prefermentFlour: "Farina prefermento",
+    bigaHydration: "Idratazione biga",
+    prefermentRoom: "Prefermento ambiente",
+    prefermentCold: "Prefermento freddo",
+    flourBlend: "Blend farine",
+    addFlour: "Aggiungi farina",
+    blendTotal: "Blend totale",
+    totalLabel: "totale",
+    styleLibrary: "Libreria stili completa",
+    breadProfiles: "Profili pane",
+    breadModeHint: "La modalità pane copre pani in teglia, pani piatti e filoni con guida specifica per lievitazione e cottura.",
+    productModeHint: "Pizza mantiene l'intera libreria stili pizza. Pane restringe l'app a profili pensati prima per il pane.",
+    workspaceHint: "Guidato tiene l'essenziale in primo piano. Studio apre blend farine, costi, salvataggi e diario di cottura.",
+    guidedStylesHint: "Parti da uno stile base, poi usa la libreria completa per impasti regionali o speciali.",
+    prefermentHint:
+      "Il bassinage è una tecnica di impasto, non un prefermento. Lievito madre e lievito naturale usano qui lo slot del prefermento e sostituiscono il lievito aggiuntivo nell'impasto finale.",
+    appInstall: "Installazione app",
+    appInstallHint: "Installa Pizza Geek per un avvio più rapido e accesso offline alle ricette.",
+    installApp: "Installa app",
+    installReady: "Pronta da installare su questo dispositivo.",
+    installedApp: "Installata e avviabile come app.",
+    installUnavailable: "L'installazione non è ancora disponibile in questo browser.",
+    offlineReady: "La cache offline è pronta dopo la prima visita.",
+    offlinePending: "Il supporto offline si sta preparando.",
+    offlineNow: "Sei offline. Le schermate in cache dovrebbero comunque funzionare.",
+    recipeData: "Dati ricette",
+    recipeDataHint: "Sposta ricette salvate e note di cottura tra dispositivi con un backup JSON versionato.",
+    panGeometry: "Geometria teglia",
+    quickWeights: "Pesi rapidi",
+    sizeHint: "Tocca un diametro per applicare un peso panetto tipico per questo stile.",
+    freeformLoafHint: "I filoni liberi saltano i preset pizza. Forma bene, lievita in banneton o in una ciotola rivestita, poi incidi e cuoci con vapore.",
+    tinLoafHint: "I pani in stampo usano le dimensioni sopra per stimare il peso impasto e tenere onesto il profilo di cottura.",
+    shape: "Forma",
+    unit: "Unità",
+    rectangular: "Rettangolare",
+    round: "Rotonda",
+    inches: "Pollici",
+    centimeters: "Centimetri",
+    length: "Lunghezza",
+    width: "Larghezza",
+    diameter: "Diametro",
+    depth: "Profondità",
+    applyPanWeight: "Applica peso teglia",
+    stoneTemp: "Temp. pietra",
+    topHeat: "Calore superiore",
+    deckTemp: "Temp. platea",
+    broilerFinish: "Finitura grill",
+    finishingBroil: "Grill finale",
+    sauce: "Salsa",
+    sauceStyle: "Stile salsa",
+    sauceWeight: "Salsa / pizza",
+    sauceHint: "Aggiunge indicazioni salsa alla scheda ricetta e al metodo.",
+    sauceClassic: "Pomodoro classico",
+    sauceRaw: "Pomodoro crudo",
+    sauceCooked: "Pomodoro cotto",
+    sauceWhite: "Salsa bianca",
+    today: "Parti ora",
+    readyBy: "Pronta per",
+    readyDate: "Data pronta",
+    quickSchedule: "Pianificazione rapida",
+    quickScheduleHint: "Scegli l'obiettivo di cottura e Pizza Geek pianifica a ritroso per te.",
+    breadQuickScheduleHint: "Scegli la finestra del pane e Pizza Geek pianifica puntata, appretto e cottura in base al profilo.",
+    startAt: "Inizio",
+    todayTarget: "Stesso giorno",
+    overnightTarget: "Notte",
+    twoDayTarget: "2 giorni",
+    threeDayTarget: "3 giorni",
+    rapidTarget: "Rapido",
+    breadExpressTarget: "Impasta e cuoci",
+    breadTodayTarget: "Pane in giornata",
+    breadOvernightTarget: "Domani mattina",
+    breadTwoDayTarget: "Più aroma",
+    breadThreeDayTarget: "Pane del weekend",
+    flour: "Farina",
+    water: "Acqua",
+    yeast: "Lievito",
+    bake: "Cottura",
+    effectiveFerment: "Fermentazione effettiva",
+    totalTime: "Tempo totale",
+    waterTemp: "Temp. acqua",
+    targetFdt: "FDT target",
+    bakeTime: "Tempo cottura",
+    prefermentSplit: "Divisione prefermento",
+    mainDough: "Impasto finale",
+    inPreferment: "nel prefermento",
+    mainDoughAdditions: "Aggiunte impasto finale",
+    additionalFlour: "farina aggiuntiva",
+    additionalWater: "acqua aggiuntiva",
+    additionalYeast: "lievito aggiuntivo",
+    batch: "Batch",
+    perDough: "Per panetto",
+    perPiece: "Per pezzo",
+    perLoaf: "Per pagnotta",
+    recipeName: "Nome ricetta",
+    save: "Salva",
+    print: "Stampa",
+    export: "Esporta",
+    exportData: "Esporta dati",
+    importData: "Importa dati",
+    copy: "Copia",
+    dataExported: "Backup ricette scaricato.",
+    dataExportError: "Impossibile scaricare il backup.",
+    dataImportError: "Impossibile importare questo file. Usa un backup JSON di Pizza Geek.",
+    addPhoto: "Aggiungi foto",
+    removePhoto: "Rimuovi foto",
+    rating: "Valutazione",
+    outcome: "Esito",
+    notes: "Note",
+    notesPlaceholder: "Com'è andata la cottura? Mollica, colore, formatura, comportamento del forno, prossima correzione...",
+    logBake: "Registra cottura",
+    keeper: "Da tenere",
+    tweak: "Da ritoccare",
+    fail: "Fallita",
+    savedCount: "ricette salvate",
+    journalCount: "note di cottura",
+    noPhoto: "Nessuna foto",
+    flourCost: "Farina / kg",
+    yeastCost: "Lievito / kg",
+    oilCost: "Olio / kg",
+    currency: "Valuta",
+    hydrationFit: "Idratazione",
+    saltBalance: "Bilanciamento sale",
+    fermentPlan: "Piano fermentazione",
+    flourStrength: "Forza farina",
+    mixTemperature: "Temperatura impasto",
+    advancedSchedule: "Piano dettagliato",
+    sauceRecipeDetails: "Ricetta salsa",
+    collapseSection: "Comprimi sezione",
+    expandSection: "Espandi sezione"
   }
 } as const;
 
 type CopyText = Record<keyof typeof copy.en, string>;
 
-const yeastOptions: Array<{ value: YeastType; label: string }> = [
-  { value: "idy", label: "IDY" },
-  { value: "ady", label: "ADY" },
-  { value: "fresh", label: "Fresh" }
-];
+function getIntlLocale(locale: LocaleCode): string {
+  if (locale === "de") return "de-DE";
+  if (locale === "it") return "it-IT";
+  return "en-US";
+}
+
+function getBakeDurationUnit(unit: DoughResult["oven"]["unit"], locale: LocaleCode): string {
+  if (locale === "de") return unit === "seconds" ? "Sek." : "Min.";
+  if (locale === "it") return unit === "seconds" ? "sec." : "min.";
+  return unit;
+}
+
+function getLanguageLabel(locale: LocaleCode, labels: Pick<CopyText, "english" | "german" | "italian">): string {
+  if (locale === "de") return labels.german;
+  if (locale === "it") return labels.italian;
+  return labels.english;
+}
+
+function getPerPizzaLabel(locale: LocaleCode): string {
+  return locale === "de" ? "Pizza" : "pizza";
+}
+
+function getYeastOptionLabel(type: YeastType, locale: LocaleCode): string {
+  if (type === "ady") {
+    if (locale === "de") return "ADY (Aktive Trockenhefe)";
+    if (locale === "it") return "ADY (Lievito secco attivo)";
+    return "ADY (Active Dry Yeast)";
+  }
+
+  if (type === "fresh") {
+    if (locale === "de") return "Frischhefe";
+    if (locale === "it") return "Lievito fresco";
+    return "Fresh yeast";
+  }
+
+  if (locale === "de") return "IDY (Instant-Trockenhefe)";
+  if (locale === "it") return "IDY (Lievito secco istantaneo)";
+  return "IDY (Instant Dry Yeast)";
+}
+
+function getYeastOptions(locale: LocaleCode): Array<{ value: YeastType; label: string }> {
+  return [
+    { value: "idy", label: getYeastOptionLabel("idy", locale) },
+    { value: "ady", label: getYeastOptionLabel("ady", locale) },
+    { value: "fresh", label: getYeastOptionLabel("fresh", locale) }
+  ];
+}
 
 const ovenOptions: Array<{ value: OvenType; label: string }> = [
   { value: "wood-fired", label: "Wood" },
@@ -705,15 +976,27 @@ function getBatchLabels(styleId: string, labels: CopyText) {
 
 function getBatchDescriptor(input: CalculatorInput, style: PizzaStyle, locale: LocaleCode): string {
   if (isLoafStyleId(style.id)) {
-    return locale === "de"
-      ? `${input.doughBalls} Laib${input.doughBalls === 1 ? "" : "e"} mit ${input.ballWeight}g`
-      : `${input.doughBalls} loaf${input.doughBalls === 1 ? "" : "s"} at ${input.ballWeight}g`;
+    if (locale === "de") {
+      return `${input.doughBalls} Laib${input.doughBalls === 1 ? "" : "e"} mit ${input.ballWeight}g`;
+    }
+
+    if (locale === "it") {
+      return `${input.doughBalls} pagnotta${input.doughBalls === 1 ? "" : "e"} da ${input.ballWeight}g`;
+    }
+
+    return `${input.doughBalls} loaf${input.doughBalls === 1 ? "" : "s"} at ${input.ballWeight}g`;
   }
 
   if (isBreadStyleId(style.id)) {
-    return locale === "de"
-      ? `${input.doughBalls} Stueck${input.doughBalls === 1 ? "" : "e"} mit ${input.ballWeight}g`
-      : `${input.doughBalls} piece${input.doughBalls === 1 ? "" : "s"} at ${input.ballWeight}g`;
+    if (locale === "de") {
+      return `${input.doughBalls} Stück${input.doughBalls === 1 ? "" : "e"} mit ${input.ballWeight}g`;
+    }
+
+    if (locale === "it") {
+      return `${input.doughBalls} pezzo${input.doughBalls === 1 ? "" : "i"} da ${input.ballWeight}g`;
+    }
+
+    return `${input.doughBalls} piece${input.doughBalls === 1 ? "" : "s"} at ${input.ballWeight}g`;
   }
 
   return `${input.doughBalls} x ${input.ballWeight}g`;
@@ -749,7 +1032,7 @@ function formatTemperature(tempF: number, unit: TemperatureUnit): string {
 }
 
 function formatDateTime(value: string, locale: LocaleCode): string {
-  return new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-US", {
+  return new Intl.DateTimeFormat(getIntlLocale(locale), {
     weekday: "short",
     month: "short",
     day: "numeric",
@@ -765,7 +1048,7 @@ function isStandaloneDisplayMode() {
 }
 
 function formatPlannerTarget(value: Date, locale: LocaleCode): string {
-  return new Intl.DateTimeFormat(locale === "de" ? "de-DE" : "en-US", {
+  return new Intl.DateTimeFormat(getIntlLocale(locale), {
     weekday: "short",
     hour: "numeric",
     minute: "2-digit"
@@ -773,7 +1056,7 @@ function formatPlannerTarget(value: Date, locale: LocaleCode): string {
 }
 
 function formatMoney(value: number, currency: string, locale: LocaleCode) {
-  return new Intl.NumberFormat(locale === "de" ? "de-DE" : "en-US", {
+  return new Intl.NumberFormat(getIntlLocale(locale), {
     style: "currency",
     currency
   }).format(value);
@@ -860,11 +1143,49 @@ function toneForScore(score: number): QualitySignal["tone"] {
   return "danger";
 }
 
+function isNaturalStarterPreferment(input: CalculatorInput): boolean {
+  return (
+    input.preferment.kind === "biga" &&
+    (input.preferment.bigaStyle === "lievito-madre" || input.preferment.bigaStyle === "sauerdough")
+  );
+}
+
+function getPrefermentLeaveningName(input: CalculatorInput, locale: LocaleCode): string {
+  if (!isNaturalStarterPreferment(input)) {
+    if (locale === "de") return "Hefe";
+    if (locale === "it") return "lievito";
+    return "yeast";
+  }
+
+  if (input.preferment.bigaStyle === "lievito-madre") {
+    if (locale === "de") return "Lievito-madre-Anstellgut";
+    if (locale === "it") return "lievito madre";
+    return "lievito madre starter";
+  }
+
+  if (locale === "de") return "Sauerteig-Anstellgut";
+  if (locale === "it") return "lievito naturale";
+  return "sourdough starter";
+}
+
+function getNaturalStarterUiHint(locale: LocaleCode): string {
+  if (locale === "de") {
+    return "Bei Lievito madre oder Sauerteig ist keine zusätzliche Industriehefe aktiv. Die App ignoriert IDY, ADY und Frischhefe in diesem Modus.";
+  }
+
+  if (locale === "it") {
+    return "Con lievito madre o lievito naturale non viene usato lievito commerciale aggiuntivo. In questa modalità l'app ignora IDY, ADY e lievito fresco.";
+  }
+
+  return "With lievito madre or sourdough, no extra commercial yeast is used. In this mode the app ignores IDY, ADY, and fresh yeast.";
+}
+
 function getPrefermentMode(input: CalculatorInput): PrefermentMode {
   if (input.preferment.kind === "none") return "none";
   if (input.preferment.kind === "poolish") return "poolish";
   if (input.preferment.bigaStyle === "tiga") return "tiga";
-  if (input.preferment.bigaStyle === "bassinage") return "bassinage";
+  if (input.preferment.bigaStyle === "lievito-madre") return "lievito-madre";
+  if (input.preferment.bigaStyle === "sauerdough") return "sauerdough";
   return "biga";
 }
 
@@ -872,31 +1193,46 @@ function getPrefermentPatch(mode: PrefermentMode): Partial<CalculatorInput["pref
   if (mode === "none") return { kind: "none" };
   if (mode === "poolish") return { kind: "poolish", bigaStyle: "standard", bigaHydration: 100 };
   if (mode === "tiga") return { kind: "biga", bigaStyle: "tiga", bigaHydration: 55 };
-  if (mode === "bassinage") return { kind: "biga", bigaStyle: "bassinage", bigaHydration: 55 };
+  if (mode === "lievito-madre") return { kind: "biga", bigaStyle: "lievito-madre", bigaHydration: 50 };
+  if (mode === "sauerdough") return { kind: "biga", bigaStyle: "sauerdough", bigaHydration: 100 };
   return { kind: "biga", bigaStyle: "standard", bigaHydration: 55 };
 }
 
 function getPrefermentDisplayName(input: CalculatorInput, locale: LocaleCode): string {
   if (input.preferment.kind === "poolish") return "Poolish";
   if (input.preferment.bigaStyle === "tiga") return "Tiga";
-  if (input.preferment.bigaStyle === "bassinage") {
-    return locale === "de" ? "Bassinage-Biga" : "Bassinage biga";
-  }
+  if (input.preferment.bigaStyle === "lievito-madre") return "Lievito madre";
+  if (input.preferment.bigaStyle === "sauerdough") return locale === "de" ? "Sauerteig" : "Sourdough";
   return "Biga";
 }
 
 function getPresetLabel(key: FermentationPresetKey, locale: LocaleCode): string {
   if (locale === "en") return FERMENTATION_PRESETS[key].label;
 
+  if (locale === "de") {
+    const labels: Record<FermentationPresetKey, string> = {
+      authentic: "Authentisch",
+      rapid: "Schnell",
+      express: "Express",
+      sameDay: "Gleicher Tag",
+      overnight: "Über Nacht",
+      twoDay: "2 Tage",
+      threeDay: "3 Tage",
+      cellar: "Keller"
+    };
+
+    return labels[key];
+  }
+
   const labels: Record<FermentationPresetKey, string> = {
-    authentic: "Authentisch",
-    rapid: "Schnell",
+    authentic: "Autentico",
+    rapid: "Rapido",
     express: "Express",
-    sameDay: "Gleicher Tag",
-    overnight: "Uber Nacht",
-    twoDay: "2 Tage",
-    threeDay: "3 Tage",
-    cellar: "Keller"
+    sameDay: "Stesso giorno",
+    overnight: "Notte",
+    twoDay: "2 giorni",
+    threeDay: "3 giorni",
+    cellar: "Cantina"
   };
 
   return labels[key];
@@ -1180,56 +1516,91 @@ function formatBakeWindow(
   unit: TemperatureUnit,
   detail?: string
 ): string {
-  const durationUnit = locale === "de" ? (oven.unit === "seconds" ? "Sek." : "Min.") : oven.unit;
-  return detail
-    ? `${detail}, ${oven.minTime}-${oven.maxTime} ${durationUnit}`
-    : locale === "de"
-      ? `${oven.minTime}-${oven.maxTime} ${durationUnit} bei ${formatTemperature(oven.tempF, unit)}`
-      : `${oven.minTime}-${oven.maxTime} ${durationUnit} @ ${formatTemperature(oven.tempF, unit)}`;
+  const durationUnit = getBakeDurationUnit(oven.unit, locale);
+  if (detail) {
+    return `${detail}, ${oven.minTime}-${oven.maxTime} ${durationUnit}`;
+  }
+
+  if (locale === "de") {
+    return `${oven.minTime}-${oven.maxTime} ${durationUnit} bei ${formatTemperature(oven.tempF, unit)}`;
+  }
+
+  if (locale === "it") {
+    return `${oven.minTime}-${oven.maxTime} ${durationUnit} a ${formatTemperature(oven.tempF, unit)}`;
+  }
+
+  return `${oven.minTime}-${oven.maxTime} ${durationUnit} @ ${formatTemperature(oven.tempF, unit)}`;
 }
 
 function getWaterSummaryText(result: DoughResult, locale: LocaleCode, unit: TemperatureUnit) {
   const water = result.waterTemperature;
 
-  return locale === "de"
-    ? {
-        title: "Wassertemperatur",
-        useText: `Wasser bei ${formatTemperaturePair(water.waterTempF, unit)} verwenden.`,
-        targetText: `Ziel-Teigtemperatur: ${formatTemperaturePair(water.targetFdtF, unit)} fur ${result.totalFermentationHours}h Gare.`
-      }
-    : {
-        title: "Water Temperature",
-        useText: `Use water at ${formatTemperaturePair(water.waterTempF, unit)}.`,
-        targetText: `Target dough temp: ${formatTemperaturePair(water.targetFdtF, unit)} for ${result.totalFermentationHours}h ferment.`
-      };
+  if (locale === "de") {
+    return {
+      title: "Wassertemperatur",
+      useText: `Wasser bei ${formatTemperaturePair(water.waterTempF, unit)} verwenden.`,
+      targetText: `Ziel-Teigtemperatur: ${formatTemperaturePair(water.targetFdtF, unit)} für ${result.totalFermentationHours}h Gare.`
+    };
+  }
+
+  if (locale === "it") {
+    return {
+      title: "Temperatura dell'acqua",
+      useText: `Usa acqua a ${formatTemperaturePair(water.waterTempF, unit)}.`,
+      targetText: `Temperatura impasto target: ${formatTemperaturePair(water.targetFdtF, unit)} per ${result.totalFermentationHours}h di fermentazione.`
+    };
+  }
+
+  return {
+    title: "Water Temperature",
+    useText: `Use water at ${formatTemperaturePair(water.waterTempF, unit)}.`,
+    targetText: `Target dough temp: ${formatTemperaturePair(water.targetFdtF, unit)} for ${result.totalFermentationHours}h ferment.`
+  };
 }
 
 function getSauceUiCopy(locale: LocaleCode) {
-  return locale === "de"
-    ? {
-        options: "Saucenoptionen",
-        ingredients: "Zutaten",
-        instructions: "Anleitung",
-        proTip: "Profi-Tipp",
-        source: "Quelle",
-        yield: "Ergibt",
-        copyMethod: "Ablauf kopieren",
-        copyMethodCopied: "Kopiert",
-        copyMethodFailed: "Kopieren fehlgeschlagen",
-        madeWith: "Erstellt mit Pizza Geek"
-      }
-    : {
-        options: "Sauce Options",
-        ingredients: "Ingredients",
-        instructions: "Instructions",
-        proTip: "Pro Tip",
-        source: "Source",
-        yield: "Yield",
-        copyMethod: "Copy method",
-        copyMethodCopied: "Copied",
-        copyMethodFailed: "Copy failed",
-        madeWith: "Made with Pizza Geek"
-      };
+  if (locale === "de") {
+    return {
+      options: "Saucenoptionen",
+      ingredients: "Zutaten",
+      instructions: "Anleitung",
+      proTip: "Profi-Tipp",
+      source: "Quelle",
+      yield: "Ergibt",
+      copyMethod: "Ablauf kopieren",
+      copyMethodCopied: "Kopiert",
+      copyMethodFailed: "Kopieren fehlgeschlagen",
+      madeWith: "Erstellt mit Pizza Geek"
+    };
+  }
+
+  if (locale === "it") {
+    return {
+      options: "Opzioni salsa",
+      ingredients: "Ingredienti",
+      instructions: "Istruzioni",
+      proTip: "Consiglio pro",
+      source: "Fonte",
+      yield: "Resa",
+      copyMethod: "Copia metodo",
+      copyMethodCopied: "Copiato",
+      copyMethodFailed: "Copia non riuscita",
+      madeWith: "Creato con Pizza Geek"
+    };
+  }
+
+  return {
+    options: "Sauce Options",
+    ingredients: "Ingredients",
+    instructions: "Instructions",
+    proTip: "Pro Tip",
+    source: "Source",
+    yield: "Yield",
+    copyMethod: "Copy method",
+    copyMethodCopied: "Copied",
+    copyMethodFailed: "Copy failed",
+    madeWith: "Made with Pizza Geek"
+  };
 }
 
 const LOCALIZED_SAUCE_OPTIONS: Partial<Record<LocaleCode, Record<string, Partial<SauceRecipeOption>>>> = {
@@ -1266,7 +1637,9 @@ function localizeSauceSaltWarning(message: string, locale: LocaleCode): string {
 
   const translations: Record<string, string> = {
     "Always check your canned tomato label before adding salt. Many brands (Cento, La Valle, etc.) already contain salt. Taste first, adjust later.":
-      "Vor dem Salzen immer das Etikett der Dosentomaten pruefen. Viele Marken (Cento, La Valle usw.) enthalten bereits Salz. Erst probieren, dann anpassen."
+      locale === "de"
+        ? "Vor dem Salzen immer das Etikett der Dosentomaten prüfen. Viele Marken (Cento, La Valle usw.) enthalten bereits Salz. Erst probieren, dann anpassen."
+        : "Controlla sempre l'etichetta dei pomodori in scatola prima di aggiungere sale. Molti marchi (Cento, La Valle ecc.) contengono già sale. Assaggia prima, regola dopo."
   };
 
   return translations[message] ?? message;
@@ -1281,19 +1654,23 @@ function getEnrichmentHint(
     case "oil":
       return locale === "de"
         ? `Bereich: ${result.style.oil.min}-${result.style.oil.max}%`
-        : `Range: ${result.style.oil.min}-${result.style.oil.max}%`;
+        : locale === "it"
+          ? `Intervallo: ${result.style.oil.min}-${result.style.oil.max}%`
+          : `Range: ${result.style.oil.min}-${result.style.oil.max}%`;
     case "sugar":
       return locale === "de"
         ? `Bereich: ${result.style.sugar.min}-${result.style.sugar.max}%`
-        : `Range: ${result.style.sugar.min}-${result.style.sugar.max}%`;
+        : locale === "it"
+          ? `Intervallo: ${result.style.sugar.min}-${result.style.sugar.max}%`
+          : `Range: ${result.style.sugar.min}-${result.style.sugar.max}%`;
     case "honey":
-      return locale === "de" ? "Alternative zu Zucker" : "Alternative to sugar";
+      return locale === "de" ? "Alternative zu Zucker" : locale === "it" ? "Alternativa allo zucchero" : "Alternative to sugar";
     case "malt":
-      return locale === "de" ? "Typisch: 0.5-1%" : "Typical: 0.5-1%";
+      return locale === "de" ? "Typisch: 0.5-1%" : locale === "it" ? "Tipico: 0.5-1%" : "Typical: 0.5-1%";
     case "lard":
-      return locale === "de" ? "Alternative zu Oel" : "Alternative to oil";
+      return locale === "de" ? "Alternative zu Öl" : locale === "it" ? "Alternativa all'olio" : "Alternative to oil";
     case "milk-powder":
-      return locale === "de" ? "Typisch: 1-2%" : "Typical: 1-2%";
+      return locale === "de" ? "Typisch: 1-2%" : locale === "it" ? "Tipico: 1-2%" : "Typical: 1-2%";
     default:
       return undefined;
   }
@@ -1304,6 +1681,13 @@ function normalizeCalculatorInput(candidate: CalculatorInput): CalculatorInput {
   const base = createDefaultInput(styleId);
   const legacyPizzaOvenTemp = (candidate as CalculatorInput & { oven?: { pizzaOvenTempF?: number } }).oven
     ?.pizzaOvenTempF;
+  const preferment = {
+    ...base.preferment,
+    ...candidate?.preferment
+  };
+  const naturalStarter =
+    preferment.kind === "biga" &&
+    (preferment.bigaStyle === "lievito-madre" || preferment.bigaStyle === "sauerdough");
   const sauce = {
     ...base.sauce,
     ...candidate?.sauce
@@ -1313,13 +1697,15 @@ function normalizeCalculatorInput(candidate: CalculatorInput): CalculatorInput {
   return {
     ...base,
     ...candidate,
+    yeastType: naturalStarter ? "fresh" : candidate?.yeastType ?? base.yeastType,
+    manualYeastPercent: naturalStarter ? undefined : candidate?.manualYeastPercent,
     fermentation: {
       ...base.fermentation,
       ...candidate?.fermentation
     },
     preferment: {
-      ...base.preferment,
-      ...candidate?.preferment
+      ...preferment,
+      bigaStyle: preferment.bigaStyle === "bassinage" ? "standard" : preferment.bigaStyle
     },
     sauce: {
       ...sauce,
@@ -1348,13 +1734,21 @@ function localizeWaterMessage(message: string, locale: LocaleCode): string {
 
   const translations: Record<string, string> = {
     "Ice water needed. Chill water thoroughly and include ice if required.":
-      "Sehr kaltes Wasser notig. Wasser stark herunterkuhlen und bei Bedarf Eis einplanen.",
+      locale === "de"
+        ? "Sehr kaltes Wasser nötig. Wasser stark herunterkühlen und bei Bedarf Eis einplanen."
+        : "Serve acqua molto fredda. Raffreddala bene e aggiungi ghiaccio se necessario.",
     "Very cold water. Refrigerate the water before mixing.":
-      "Sehr kaltes Wasser. Das Wasser vor dem Mischen kuhlschrankkalt machen.",
+      locale === "de"
+        ? "Sehr kaltes Wasser. Das Wasser vor dem Mischen kühlschrankkalt machen."
+        : "Acqua molto fredda. Mettila in frigo prima dell'impasto.",
     "Warm water. Check yeast freshness and avoid overheating the dough.":
-      "Warmes Wasser. Hefefrische prufen und ein Uberhitzen des Teigs vermeiden.",
+      locale === "de"
+        ? "Warmes Wasser. Hefefrische prüfen und ein Überhitzen des Teigs vermeiden."
+        : "Acqua calda. Controlla la freschezza del lievito ed evita di surriscaldare l'impasto.",
     "Active dry yeast works best if bloomed separately in warm water first.":
-      "Aktive Trockenhefe funktioniert am besten, wenn sie zuerst separat in warmem Wasser aktiviert wird."
+      locale === "de"
+        ? "Aktive Trockenhefe funktioniert am besten, wenn sie zuerst separat in warmem Wasser aktiviert wird."
+        : "Il lievito secco attivo funziona meglio se viene prima riattivato separatamente in acqua tiepida."
   };
 
   return translations[message] ?? message;
@@ -1422,8 +1816,8 @@ function localizePlanStep(
     case "Bassinage biga cold ferment":
       return locale === "de"
         ? {
-            label: `${prefermentName} kalt fuhren`,
-            description: `${input.preferment.coldHours}h im Kuehlschrank.`
+            label: `${prefermentName} kalt führen`,
+            description: `${input.preferment.coldHours}h im Kühlschrank.`
           }
         : {
             label: `${prefermentName} Cold Ferment`,
@@ -1495,7 +1889,7 @@ function localizePlanStep(
             label: "Vorformen",
             description:
               input.doughBalls > 1
-                ? `In ${input.doughBalls} Stuecke teilen, locker vorformen und fuer den Endformschluss entspannen lassen.`
+                ? `In ${input.doughBalls} Stücke teilen, locker vorformen und für den Endformschluss entspannen lassen.`
                 : "Den Teig locker vorformen und vor dem Endformen entspannen lassen."
           }
         : {
@@ -1521,7 +1915,7 @@ function localizePlanStep(
             label: "Endformen",
             description: tinLoaf
               ? "Straff zum Kastenlaib formen und mit dem Schluss nach unten in die gefettete Form setzen."
-              : "Straff formen und mit dem Schluss nach oben in den bemehlten Garkorb oder in eine ausgelegte Schuessel setzen."
+              : "Straff formen und mit dem Schluss nach oben in den bemehlten Garkorb oder in eine ausgelegte Schüssel setzen."
           }
         : {
             label: "Final shape",
@@ -1532,7 +1926,7 @@ function localizePlanStep(
     case "Cold Ball":
       return locale === "de"
         ? {
-            label: "Kalte Stueckgare",
+            label: "Kalte Stückgare",
             description: `${input.fermentation.coldBallHours}h bei etwa ${fridgeTemp}.`
           }
         : {
@@ -1562,7 +1956,7 @@ function localizePlanStep(
     case "Ball Proof":
       return locale === "de"
         ? {
-            label: "Stueckgare",
+            label: "Stückgare",
             description: `${input.fermentation.finalRiseHours}h Endgare vor dem Backen.`
           }
         : {
@@ -1573,7 +1967,7 @@ function localizePlanStep(
       return locale === "de"
         ? {
             label: "Endgare",
-            description: `${input.fermentation.finalRiseHours}h bei etwa ${roomTemp}, bis der Teig nach sanftem Druck langsam zurueckkommt.`
+            description: `${input.fermentation.finalRiseHours}h bei etwa ${roomTemp}, bis der Teig nach sanftem Druck langsam zurückkommt.`
           }
         : {
             label: "Final Proof",
@@ -1585,8 +1979,8 @@ function localizePlanStep(
             label: "Bereit zum Backen",
             description: loafWorkflow
               ? tinLoaf
-                ? "Ofen vorheizen, den Kastenlaib ausbacken und vor dem Schneiden vollstaendig auskuehlen lassen."
-                : "Ofen vorheizen, den Laib einschneiden, mit Dampf oder Deckel anbacken und vollstaendig auskuehlen lassen."
+                ? "Ofen vorheizen, den Kastenlaib ausbacken und vor dem Schneiden vollständig auskühlen lassen."
+                : "Ofen vorheizen, den Laib einschneiden, mit Dampf oder Deckel anbacken und vollständig auskühlen lassen."
               : "Vorheizen, formen, belegen und backen."
           }
         : {
@@ -1612,18 +2006,20 @@ function getMethodSteps(
   const water = result.waterTemperature;
   const ingredients = result.ingredients;
   const prefermentName = getPrefermentDisplayName(input, locale);
+  const prefermentLeaveningName = getPrefermentLeaveningName(input, locale);
   const sauceOption = localizeSauceOption(getSauceOption(input.styleId, input.sauce.recipeId), locale);
   const waterSummary = getWaterSummaryText(result, locale, unit);
   const bakeDetail = getOvenDetailText(input, copy[locale], unit);
   const bakeWindow = formatBakeWindow(result.oven, locale, unit, bakeDetail);
   const loafWorkflow = isLoafStyleId(input.styleId);
   const tinLoaf = isTinLoafStyleId(input.styleId);
+  const naturalStarter = isNaturalStarterPreferment(input);
 
   if (input.preferment.kind !== "none") {
     steps.push(
       locale === "de"
-        ? `${prefermentName} mischen: ${ingredients.prefermentFlour}g Mehl (${input.preferment.flourPercent}% vom Gesamtmehl), ${ingredients.prefermentWater}g Wasser und ${ingredients.prefermentYeast}g Hefe kombinieren. ${input.preferment.roomHours}h bei Raumtemperatur reifen lassen${input.preferment.coldHours > 0 ? `, danach ${input.preferment.coldHours}h kalt fuhren` : ""}.`
-        : `Mix ${prefermentName}: combine ${ingredients.prefermentFlour}g flour (${input.preferment.flourPercent}% of total flour), ${ingredients.prefermentWater}g water, and ${ingredients.prefermentYeast}g yeast. Ferment ${input.preferment.roomHours}h at room temperature${input.preferment.coldHours > 0 ? `, then ${input.preferment.coldHours}h cold` : ""}.`
+        ? `${prefermentName} mischen: ${ingredients.prefermentFlour}g Mehl (${input.preferment.flourPercent}% vom Gesamtmehl), ${ingredients.prefermentWater}g Wasser und ${ingredients.prefermentYeast}g ${prefermentLeaveningName} kombinieren. ${input.preferment.roomHours}h bei Raumtemperatur reifen lassen${input.preferment.coldHours > 0 ? `, danach ${input.preferment.coldHours}h kalt führen` : ""}.`
+        : `Mix ${prefermentName}: combine ${ingredients.prefermentFlour}g flour (${input.preferment.flourPercent}% of total flour), ${ingredients.prefermentWater}g water, and ${ingredients.prefermentYeast}g ${prefermentLeaveningName}. Ferment ${input.preferment.roomHours}h at room temperature${input.preferment.coldHours > 0 ? `, then ${input.preferment.coldHours}h cold` : ""}.`
     );
   }
 
@@ -1641,16 +2037,16 @@ function getMethodSteps(
   const waterAmount = input.preferment.kind === "none" ? ingredients.totalWater : ingredients.mainWater;
   const yeast = input.preferment.kind === "none" ? ingredients.totalYeast : ingredients.mainYeast;
   const yeastLabel =
-    input.yeastType === "ady" ? "aktive Trockenhefe" : input.yeastType === "fresh" ? "frische Hefe" : "Instanthefe";
+    input.yeastType === "ady" ? "aktive Trockenhefe" : input.yeastType === "fresh" ? "Frischhefe" : "Instant-Trockenhefe";
 
   steps.push(
     locale === "de"
-      ? `Hauptteig mischen mit ${flour}g ${input.preferment.kind === "none" ? "Mehl" : "zusaetzlichem Mehl"}, ${waterAmount}g ${input.preferment.kind === "none" ? "Wasser" : "zusaetzlichem Wasser"}, ${ingredients.totalSalt}g Salz und ${yeast}g ${input.preferment.kind === "none" ? yeastLabel : `zusaetzlicher ${yeastLabel}`}${input.preferment.kind !== "none" ? ` sowie dem reifen ${prefermentName}` : ""}.`
-      : `Mix the final dough with ${flour}g ${input.preferment.kind === "none" ? "flour" : "fresh flour"}, ${waterAmount}g ${input.preferment.kind === "none" ? "water" : "fresh water"}, ${ingredients.totalSalt}g salt, and ${yeast}g ${input.preferment.kind === "none" ? (input.yeastType === "ady" ? "active dry yeast" : input.yeastType === "fresh" ? "fresh yeast" : "instant dry yeast") : `additional ${input.yeastType === "ady" ? "active dry yeast" : input.yeastType === "fresh" ? "fresh yeast" : "instant dry yeast"}`}${input.preferment.kind !== "none" ? ` plus the ripe ${prefermentName}` : ""}.`
+      ? `Hauptteig mischen mit ${flour}g ${input.preferment.kind === "none" ? "Mehl" : "zusätzlichem Mehl"}, ${waterAmount}g ${input.preferment.kind === "none" ? "Wasser" : "zusätzlichem Wasser"}, ${ingredients.totalSalt}g Salz${naturalStarter || !yeast ? "" : ` und ${yeast}g ${input.preferment.kind === "none" ? yeastLabel : `zusätzlicher ${yeastLabel}`}`}${input.preferment.kind !== "none" ? ` sowie dem reifen ${prefermentName}` : ""}.`
+      : `Mix the final dough with ${flour}g ${input.preferment.kind === "none" ? "flour" : "fresh flour"}, ${waterAmount}g ${input.preferment.kind === "none" ? "water" : "fresh water"}, ${ingredients.totalSalt}g salt${naturalStarter || !yeast ? "" : `, and ${yeast}g ${input.preferment.kind === "none" ? (input.yeastType === "ady" ? "active dry yeast" : input.yeastType === "fresh" ? "fresh yeast" : "instant dry yeast") : `additional ${input.yeastType === "ady" ? "active dry yeast" : input.yeastType === "fresh" ? "fresh yeast" : "instant dry yeast"}`}`}${input.preferment.kind !== "none" ? `${naturalStarter || !yeast ? ", plus the ripe " : " plus the ripe "}${prefermentName}` : ""}.`
   );
 
   const enrichments = [
-    ingredients.totalOil > 0 ? `${ingredients.totalOil}g Oel` : null,
+    ingredients.totalOil > 0 ? `${ingredients.totalOil}g Öl` : null,
     ingredients.totalLard > 0 ? `${ingredients.totalLard}g Schmalz` : null,
     ingredients.totalSugar > 0 ? `${ingredients.totalSugar}g Zucker` : null,
     ingredients.totalHoney > 0 ? `${ingredients.totalHoney}g Honig` : null,
@@ -1677,7 +2073,7 @@ function getMethodSteps(
   } else {
     steps.push(
       locale === "de"
-        ? "Auf niedriger Stufe mischen, dann auf mittlerer Stufe auskneten, bis sich der Teig sauber von der Schuessel loest."
+        ? "Auf niedriger Stufe mischen, dann auf mittlerer Stufe auskneten, bis sich der Teig sauber von der Schüssel löst."
         : "Mix on low until combined, then on medium-low until the dough clears the bowl and feels cohesive."
     );
   }
@@ -1701,7 +2097,7 @@ function getMethodSteps(
   if (input.fermentation.coldBulkHours > 0) {
     steps.push(
       locale === "de"
-        ? `Kalte Stockgare ${input.fermentation.coldBulkHours}h im Kuehlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}.${loafWorkflow ? " Danach locker vorformen und entspannen lassen." : " Danach teilen und rundschleifen."}`
+        ? `Kalte Stockgare ${input.fermentation.coldBulkHours}h im Kühlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}.${loafWorkflow ? " Danach locker vorformen und entspannen lassen." : " Danach teilen und rundschleifen."}`
         : `Cold bulk ${input.fermentation.coldBulkHours}h @ ${formatTemperature(input.fermentation.fridgeTempF, unit)} as one mass${loafWorkflow ? ", then pre-shape and rest." : ", then divide and ball."}`
     );
   }
@@ -1710,7 +2106,7 @@ function getMethodSteps(
     steps.push(
       locale === "de"
         ? input.doughBalls > 1
-          ? `In ${input.doughBalls} Stuecke zu je etwa ${input.ballWeight}g teilen, locker vorformen und 20 Minuten entspannen lassen.`
+          ? `In ${input.doughBalls} Stücke zu je etwa ${input.ballWeight}g teilen, locker vorformen und 20 Minuten entspannen lassen.`
           : "Den Teig locker vorformen und 20 Minuten entspannen lassen."
         : input.doughBalls > 1
           ? `Divide into ${input.doughBalls} pieces around ${input.ballWeight}g each, pre-shape gently, and rest 20 minutes.`
@@ -1720,7 +2116,7 @@ function getMethodSteps(
       locale === "de"
         ? tinLoaf
           ? "Danach straff zu einem Kastenlaib formen und mit dem Schluss nach unten in die gefettete Form setzen."
-          : "Danach straff formen und mit dem Schluss nach oben in den bemehlten Garkorb oder in eine ausgelegte Schuessel legen."
+          : "Danach straff formen und mit dem Schluss nach oben in den bemehlten Garkorb oder in eine ausgelegte Schüssel legen."
         : tinLoaf
           ? "Final-shape into a tight pan loaf and place it seam-side down in the greased tin."
           : "Final-shape tightly and place the loaf seam-side up in a floured banneton or lined bowl."
@@ -1740,8 +2136,8 @@ function getMethodSteps(
     steps.push(
       locale === "de"
         ? loafWorkflow
-          ? `Kalte Gare ${input.fermentation.coldBallHours}h im Kuehlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}.`
-          : `Kalte Stueckgare ${input.fermentation.coldBallHours}h im Kuehlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}.`
+          ? `Kalte Gare ${input.fermentation.coldBallHours}h im Kühlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}.`
+          : `Kalte Stückgare ${input.fermentation.coldBallHours}h im Kühlschrank bei etwa ${formatTemperature(input.fermentation.fridgeTempF, unit)}.`
         : loafWorkflow
           ? `Cold proof ${input.fermentation.coldBallHours}h @ ${formatTemperature(input.fermentation.fridgeTempF, unit)} after shaping.`
           : `Cold ball ${input.fermentation.coldBallHours}h @ ${formatTemperature(input.fermentation.fridgeTempF, unit)} after dividing.`
@@ -1751,7 +2147,7 @@ function getMethodSteps(
   if (result.style.panStyle && !tinLoaf) {
     steps.push(
       locale === "de"
-        ? "Die Form grosszuegig oelen, den Teig einlegen und vor dem finalen Ausziehen entspannt aufgehen lassen."
+        ? "Die Form großzügig ölen, den Teig einlegen und vor dem finalen Ausziehen entspannt aufgehen lassen."
         : "Oil the pan generously, place the dough in it, and proof until relaxed before the final stretch."
     );
   }
@@ -1760,7 +2156,7 @@ function getMethodSteps(
     steps.push(
       locale === "de"
         ? loafWorkflow
-          ? `Endgare ${input.fermentation.finalRiseHours}h bei etwa ${formatTemperature(input.fermentation.roomTempF, unit)}, bis der Teig auf sanften Druck langsam zurueckkommt.`
+          ? `Endgare ${input.fermentation.finalRiseHours}h bei etwa ${formatTemperature(input.fermentation.roomTempF, unit)}, bis der Teig auf sanften Druck langsam zurückkommt.`
           : `Temperieren ${input.fermentation.finalRiseHours}h bei etwa ${formatTemperature(input.fermentation.roomTempF, unit)} vor dem Backen.`
         : loafWorkflow
           ? `Final proof ${input.fermentation.finalRiseHours}h @ ${formatTemperature(input.fermentation.roomTempF, unit)} until the dough springs back slowly when pressed.`
@@ -1771,7 +2167,7 @@ function getMethodSteps(
   if (result.sauce) {
     steps.push(
       locale === "de"
-        ? `Sauce vorbereiten: ${sauceOption?.name ?? result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, copy.de)}. Etwa ${result.sauce.perPizzaGrams}g pro Pizza verwenden, insgesamt ${result.sauce.totalGrams}g fuer den Batch.`
+        ? `Sauce vorbereiten: ${sauceOption?.name ?? result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, copy.de)}. Etwa ${result.sauce.perPizzaGrams}g pro Pizza verwenden, insgesamt ${result.sauce.totalGrams}g für den Batch.`
         : `Prepare the sauce: ${result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, copy.en)}. Use about ${result.sauce.perPizzaGrams}g per pizza, ${result.sauce.totalGrams}g total.`
     );
 
@@ -1786,9 +2182,9 @@ function getMethodSteps(
     locale === "de"
       ? loafWorkflow
         ? tinLoaf
-          ? `Backen mit ${bakeWindow}, bis der Kastenlaib gleichmaessig gebraeunt ist. Danach aus der Form nehmen und vor dem Schneiden vollstaendig auskuehlen lassen.`
-          : `Den Laib einschneiden und mit ${bakeWindow} backen. Zu Beginn Dampf geben oder abdecken, dann ausbacken und vor dem Schneiden vollstaendig auskuehlen lassen.`
-        : `Backen mit ${bakeWindow}, bis Boden und Rand sauber ausgebacken sind und die Oberflaeche die gewuenschte Farbe hat.`
+          ? `Backen mit ${bakeWindow}, bis der Kastenlaib gleichmäßig gebräunt ist. Danach aus der Form nehmen und vor dem Schneiden vollständig auskühlen lassen.`
+          : `Den Laib einschneiden und mit ${bakeWindow} backen. Zu Beginn Dampf geben oder abdecken, dann ausbacken und vor dem Schneiden vollständig auskühlen lassen.`
+        : `Backen mit ${bakeWindow}, bis Boden und Rand sauber ausgebacken sind und die Oberfläche die gewünschte Farbe hat.`
       : loafWorkflow
         ? tinLoaf
           ? `Bake with ${bakeWindow} until the pan loaf is evenly browned. De-pan and cool completely before slicing.`
@@ -1928,7 +2324,12 @@ export function App() {
   const [isInstalled, setIsInstalled] = useState(() => isStandaloneDisplayMode());
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [offlineReady, setOfflineReady] = useState(false);
-  const [recipeName, setRecipeName] = useState(() => getDefaultRecipeName(persistedStyleId, storedSettings.language === "de" ? "de" : "en"));
+  const [recipeName, setRecipeName] = useState(() =>
+    getDefaultRecipeName(
+      persistedStyleId,
+      storedSettings.language === "de" || storedSettings.language === "it" ? storedSettings.language : "en"
+    )
+  );
   const [logDraft, setLogDraft] = useState<{
     rating: number;
     outcome: BakeLogEntry["outcome"];
@@ -1989,7 +2390,9 @@ export function App() {
     () => localizeSauceOption(selectedSauceOption, settings.language),
     [selectedSauceOption, settings.language]
   );
+  const localizedYeastOptions = useMemo(() => getYeastOptions(settings.language), [settings.language]);
   const prefermentMode = getPrefermentMode(normalizedInput);
+  const naturalStarterSelected = isNaturalStarterPreferment(normalizedInput);
   const prefermentName = getPrefermentDisplayName(normalizedInput, settings.language);
   const prefermentFlourGrams = prefermentMode === "none" ? 0 : (result.ingredients.prefermentFlour ?? 0);
   const mainDoughFlourGrams = prefermentMode === "none" ? 0 : (result.ingredients.mainFlour ?? 0);
@@ -2033,13 +2436,13 @@ export function App() {
   );
   const panelSummaries = useMemo(
     () => ({
-      settings: `${settings.language === "de" ? t.german : t.english} · ${settings.productMode === "bread" ? t.breadProduct : t.pizzaProduct} · ${settings.mode === "guided" ? t.guidedMode : t.studioMode} · °${settings.temperatureUnit} · ${settings.sizeUnit === "in" ? t.inches : t.centimeters} · ${settings.theme === "dark" ? t.dark : t.light}`,
+      settings: `${getLanguageLabel(settings.language, t)} · ${settings.productMode === "bread" ? t.breadProduct : t.pizzaProduct} · ${settings.mode === "guided" ? t.guidedMode : t.studioMode} · °${settings.temperatureUnit} · ${settings.sizeUnit === "in" ? t.inches : t.centimeters} · ${settings.theme === "dark" ? t.dark : t.light}`,
       styles: `${activeStyle.name} · ${activeStyle.origin}`,
       doughSetup: `${batchDescriptor} · ${normalizedInput.hydrationPercent}% ${t.hydration.toLowerCase()}`,
       fermentation: `${getPresetLabel(preset, settings.language)} · ${result.totalFermentationHours}h ${t.totalTime.toLowerCase()}`,
       doughStudio: normalizedInput.flourBlendEnabled ? `${prefermentName} · ${t.flourBlend}` : prefermentName,
       sauce: normalizedInput.sauce.enabled
-        ? `${localizedSelectedSauceOption?.name ?? getSauceStyleLabel(normalizedInput.sauce.style, t)} · ${normalizedInput.sauce.gramsPerPizza}g / ${settings.language === "de" ? "Pizza" : "pizza"}`
+        ? `${localizedSelectedSauceOption?.name ?? getSauceStyleLabel(normalizedInput.sauce.style, t)} · ${normalizedInput.sauce.gramsPerPizza}g / ${getPerPizzaLabel(settings.language)}`
         : t.none,
       planner:
         planMode === "ready-by"
@@ -2660,14 +3063,16 @@ export function App() {
   };
 
   const copyShareText = async () => {
-    const bakeTimeUnit = settings.language === "de" ? (result.oven.unit === "seconds" ? "Sek." : "Min.") : result.oven.unit;
+    const bakeTimeUnit = getBakeDurationUnit(result.oven.unit, settings.language);
     const lines = [
       displayRecipeName,
       `${batchDescriptor}, ${result.percentages.hydration}% ${t.hydration.toLowerCase()}`,
       `${t.flour} ${result.ingredients.totalFlour}g, ${t.water} ${result.ingredients.totalWater}g, ${t.salt.toLowerCase()} ${result.ingredients.totalSalt}g, ${t.yeast.toLowerCase()} ${result.ingredients.totalYeast}g`,
       settings.language === "de"
-        ? `${t.bake} ${formatTemperature(result.oven.tempF, settings.temperatureUnit)} fuer ${result.oven.minTime}-${result.oven.maxTime} ${bakeTimeUnit}`
-        : `${t.bake} ${formatTemperature(result.oven.tempF, settings.temperatureUnit)} for ${result.oven.minTime}-${result.oven.maxTime} ${bakeTimeUnit}`
+        ? `${t.bake} ${formatTemperature(result.oven.tempF, settings.temperatureUnit)} für ${result.oven.minTime}-${result.oven.maxTime} ${bakeTimeUnit}`
+        : settings.language === "it"
+          ? `${t.bake} ${formatTemperature(result.oven.tempF, settings.temperatureUnit)} per ${result.oven.minTime}-${result.oven.maxTime} ${bakeTimeUnit}`
+          : `${t.bake} ${formatTemperature(result.oven.tempF, settings.temperatureUnit)} for ${result.oven.minTime}-${result.oven.maxTime} ${bakeTimeUnit}`
     ];
     if (prefermentMode !== "none") {
       lines.push(
@@ -2678,7 +3083,9 @@ export function App() {
       lines.push(
         settings.language === "de"
           ? `${t.sauce}: ${localizedSelectedSauceOption?.name ?? result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, t)} - ${result.sauce.perPizzaGrams}g / Pizza (${result.sauce.totalGrams}g gesamt)`
-          : `${t.sauce}: ${localizedSelectedSauceOption?.name ?? result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, t)} - ${result.sauce.perPizzaGrams}g / pizza (${result.sauce.totalGrams}g total)`
+          : settings.language === "it"
+            ? `${t.sauce}: ${localizedSelectedSauceOption?.name ?? result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, t)} - ${result.sauce.perPizzaGrams}g / pizza (${result.sauce.totalGrams}g totali)`
+            : `${t.sauce}: ${localizedSelectedSauceOption?.name ?? result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, t)} - ${result.sauce.perPizzaGrams}g / pizza (${result.sauce.totalGrams}g total)`
       );
     }
     await copyTextToClipboard(lines.join("\n"));
@@ -2773,11 +3180,11 @@ export function App() {
             <span>{activeStyle.flourType}</span>
             <span>
               {activeStyle.fermentationHours.recommended}h{" "}
-              {settings.language === "de" ? "Zielgare" : "target ferment"}
+              {settings.language === "de" ? "Zielgare" : settings.language === "it" ? "fermentazione target" : "target ferment"}
             </span>
             <span>
               {formatTemperature(result.oven.tempF, settings.temperatureUnit)}{" "}
-              {settings.language === "de" ? "Backprofil" : "bake profile"}
+              {settings.language === "de" ? "Backprofil" : settings.language === "it" ? "profilo cottura" : "bake profile"}
             </span>
           </div>
         </div>
@@ -2821,6 +3228,7 @@ export function App() {
                   language: t.language,
                   english: t.english,
                   german: t.german,
+                  italian: t.italian,
                   theme: t.theme,
                   dark: t.dark,
                   light: t.light,
@@ -3002,17 +3410,20 @@ export function App() {
                   ) : null}
                 </div>
                 <div className="fieldGrid compact">
-                  <SelectField
-                    label={t.yeastType}
-                    value={normalizedInput.yeastType}
-                    onChange={(value) => setPartial({ yeastType: value as YeastType })}
-                  >
-                    {yeastOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </SelectField>
+                  {naturalStarterSelected ? <Notice tone="notice">{getNaturalStarterUiHint(settings.language)}</Notice> : null}
+                  {!naturalStarterSelected ? (
+                    <SelectField
+                      label={t.yeastType}
+                      value={normalizedInput.yeastType}
+                      onChange={(value) => setPartial({ yeastType: value as YeastType })}
+                    >
+                      {localizedYeastOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </SelectField>
+                  ) : null}
                   <SelectField
                     label={t.mixerType}
                     value={normalizedInput.mixerType}
@@ -3024,15 +3435,17 @@ export function App() {
                   </SelectField>
                   {!isGuidedMode ? (
                     <>
-                      <Field
-                        label={t.manualYeast}
-                        value={normalizedInput.manualYeastPercent ?? ""}
-                        suffix="%"
-                        step={0.01}
-                        onChange={(value) =>
-                          setPartial({ manualYeastPercent: value === "" ? undefined : numberValue(value) })
-                        }
-                      />
+                      {!naturalStarterSelected ? (
+                        <Field
+                          label={t.manualYeast}
+                          value={normalizedInput.manualYeastPercent ?? ""}
+                          suffix="%"
+                          step={0.01}
+                          onChange={(value) =>
+                            setPartial({ manualYeastPercent: value === "" ? undefined : numberValue(value) })
+                          }
+                        />
+                      ) : null}
                       <Field
                         label={t.flourTemp}
                         value={displayTemperatureValue(
@@ -3122,7 +3535,8 @@ export function App() {
                       <option value="poolish">{t.poolish}</option>
                       <option value="biga">{t.biga}</option>
                       <option value="tiga">{t.tiga}</option>
-                      <option value="bassinage">{t.bassinage}</option>
+                      <option value="lievito-madre">{t["lievito-madre"]}</option>
+                      <option value="sauerdough">{t.sauerdough}</option>
                     </SelectField>
                     <Toggle
                       checked={normalizedInput.flourBlendEnabled}
@@ -3131,6 +3545,7 @@ export function App() {
                       onChange={(checked) => setPartial({ flourBlendEnabled: checked })}
                     />
                   </div>
+                  <p className="sectionMeta fieldMeta">{t.prefermentHint}</p>
 
                   {prefermentMode !== "none" ? (
                     <div className="fieldGrid">
@@ -3164,8 +3579,8 @@ export function App() {
                         {normalizedInput.preferment.flourPercent}% = {prefermentFlourGrams}g {t.flour.toLowerCase()} {t.inPreferment}
                       </p>
                       <p className="sectionMeta fieldMeta">
-                        {t.mainDoughAdditions}: {mainDoughFlourGrams}g {t.additionalFlour}, {mainDoughWaterGrams}g {t.additionalWater},{" "}
-                        {mainDoughYeastGrams}g {t.additionalYeast}
+                        {t.mainDoughAdditions}: {mainDoughFlourGrams}g {t.additionalFlour}, {mainDoughWaterGrams}g {t.additionalWater}
+                        {isNaturalStarterPreferment(normalizedInput) ? "" : `, ${mainDoughYeastGrams}g ${t.additionalYeast}`}
                       </p>
                     </div>
                   ) : null}
@@ -3304,7 +3719,7 @@ export function App() {
                           <>
                             <div className="panelMetaRow">
                               <span className="sectionMeta">
-                                {localizedSelectedSauceOption.name} · {normalizedInput.sauce.gramsPerPizza}g / {settings.language === "de" ? "Pizza" : "pizza"}
+                                {localizedSelectedSauceOption.name} · {normalizedInput.sauce.gramsPerPizza}g / {getPerPizzaLabel(settings.language)}
                               </span>
                               <button
                                 className={`subtleDisclosure ${showSauceRecipe ? "open" : ""}`}
@@ -3673,10 +4088,12 @@ export function App() {
                     ? {
                         title: t.sauce,
                         lines: [
-                          `${localizedSelectedSauceOption?.name ?? result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, t)}: ${result.sauce.perPizzaGrams}g / ${settings.language === "de" ? "Pizza" : "pizza"}`,
+                          `${localizedSelectedSauceOption?.name ?? result.sauce.recipeName ?? getSauceStyleLabel(result.sauce.style, t)}: ${result.sauce.perPizzaGrams}g / ${getPerPizzaLabel(settings.language)}`,
                           settings.language === "de"
-                            ? `${result.sauce.totalGrams}g gesamt fuer den Batch`
-                            : `${result.sauce.totalGrams}g total for the batch`,
+                            ? `${result.sauce.totalGrams}g gesamt für den Batch`
+                            : settings.language === "it"
+                              ? `${result.sauce.totalGrams}g totali per il batch`
+                              : `${result.sauce.totalGrams}g total for the batch`,
                           ...(localizedSelectedSauceOption?.source ? [`${sauceUi.source}: ${localizedSelectedSauceOption.source}`] : [])
                         ]
                       }
@@ -3734,7 +4151,7 @@ export function App() {
                   <Metric label={t.bake} value={formatTemperature(result.oven.tempF, settings.temperatureUnit)} />
                   <Metric
                     label={t.bakeTime}
-                    value={`${result.oven.minTime}-${result.oven.maxTime} ${settings.language === "de" ? (result.oven.unit === "seconds" ? "Sek." : "Min.") : result.oven.unit}`}
+                    value={`${result.oven.minTime}-${result.oven.maxTime} ${getBakeDurationUnit(result.oven.unit, settings.language)}`}
                   />
                 </div>
                 {ovenDetail ? <Notice tone="notice">{ovenDetail}</Notice> : null}
@@ -4199,7 +4616,9 @@ export function App() {
             <p className="printSauceMeta">
               {settings.language === "de"
                 ? `${result.sauce.perPizzaGrams}g / Pizza · ${result.sauce.totalGrams}g gesamt`
-                : `${result.sauce.perPizzaGrams}g / pizza · ${result.sauce.totalGrams}g total`}
+                : settings.language === "it"
+                  ? `${result.sauce.perPizzaGrams}g / pizza · ${result.sauce.totalGrams}g totali`
+                  : `${result.sauce.perPizzaGrams}g / pizza · ${result.sauce.totalGrams}g total`}
               {localizedSelectedSauceOption.source ? ` · ${sauceUi.source}: ${localizedSelectedSauceOption.source}` : ""}
               {localizedSelectedSauceOption.yield ? ` · ${sauceUi.yield}: ${localizedSelectedSauceOption.yield}` : ""}
             </p>

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0 - 2026-04-27
+
+- Added Italian as a full app language, including Italian recipe naming, planner copy, settings labels, and bread/fermentation profile content
+- Set Italian locale defaults to EUR, metric sizing, and Celsius so switching languages also lands on sensible regional defaults
+- Expanded German localization with proper umlauts across the updated UI and workflow text instead of ASCII spellings like `ue`, `oe`, and `ae`
+- Added `Lievito madre` and `Sourdough` as natural-starter preferment paths and localized their labels more accurately in English, German, and Italian
+- Corrected the preferment model so `Bassinage` is no longer exposed as a preferment choice in the UI and is treated as a mixing technique rather than a starter style
+- Coupled natural-starter preferments to the dough logic so they no longer require extra commercial yeast, and the UI now hides `IDY` / `ADY` / `Fresh yeast` selection while those modes are active
+- Expanded yeast labeling to spell out `IDY`, `ADY`, and `Fresh yeast` more clearly in the interface instead of relying on unexplained abbreviations
+- Hardened persisted settings and input normalization so invalid stored locale values and older preferment states fall back safely without overriding the new defaults
+- Added and updated tests around Italian defaults, localized product profiles, preferment labeling, and natural-starter yeast suppression so the new release behavior is covered by typecheck and Vitest
+
 ## 0.3.0 - 2026-04-26
 
 - Added a clearer product split between pizza and bread, including bread-first profiles and loaf-oriented workflows

@@ -8,7 +8,7 @@ export type OvenType =
   | "steel-stone"
   | "conventional";
 export type PrefermentKind = "none" | "poolish" | "biga";
-export type BigaStyle = "standard" | "tiga" | "bassinage";
+export type BigaStyle = "standard" | "tiga" | "bassinage" | "lievito-madre" | "sauerdough";
 export type ScheduleMode = "starting-now" | "ready-by";
 export type PanShape = "round" | "rectangular";
 export type TemperatureUnit = "F" | "C";

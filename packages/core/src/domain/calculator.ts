@@ -26,6 +26,17 @@ const YEAST_LIMITS: Record<YeastType, { min: number; max: number }> = {
   fresh: { min: 0.15, max: 6 }
 };
 
+function isNaturalStarterPreferment(input: CalculatorInput): boolean {
+  return (
+    input.preferment.kind === "biga" &&
+    (input.preferment.bigaStyle === "lievito-madre" || input.preferment.bigaStyle === "sauerdough")
+  );
+}
+
+function getEffectiveYeastType(input: CalculatorInput): YeastType {
+  return isNaturalStarterPreferment(input) ? "fresh" : input.yeastType;
+}
+
 const MIXER_FRICTION_F: Record<MixerType, number> = {
   hand: 6,
   spiral: 10,
@@ -96,8 +107,9 @@ export function calculateYeastPercent(input: CalculatorInput): number {
   const hours = Math.max(1, effectiveFermentationHours(input));
   const base = 3.48 * hours ** -1.447;
   const shortFermentBoost = hours < 4 ? 1 + (0.25 * (4 - hours)) / 3 : 1;
-  const yeast = base * shortFermentBoost * YEAST_MULTIPLIER[input.yeastType] * ovenYeastMultiplier(input.oven);
-  const limits = YEAST_LIMITS[input.yeastType];
+  const yeastType = getEffectiveYeastType(input);
+  const yeast = base * shortFermentBoost * YEAST_MULTIPLIER[yeastType] * ovenYeastMultiplier(input.oven);
+  const limits = YEAST_LIMITS[yeastType];
   return clamp(yeast, limits.min, limits.max);
 }
 
@@ -124,6 +136,7 @@ export function ovenYeastMultiplier(oven: OvenOptions): number {
 
 export function calculateWaterTemperature(input: CalculatorInput, waterGrams: number): WaterTemperatureResult {
   const schedule = input.fermentation;
+  const yeastType = getEffectiveYeastType(input);
   const coldHours = schedule.coldBulkHours + schedule.coldBallHours;
   let targetFdtF: number;
 
@@ -151,7 +164,7 @@ export function calculateWaterTemperature(input: CalculatorInput, waterGrams: nu
   else if (waterTempF < 50) warning = "Very cold water. Refrigerate the water before mixing.";
   else if (waterTempF > 85) warning = "Warm water. Check yeast freshness and avoid overheating the dough.";
 
-  if (input.yeastType === "ady" && waterTempF < 70) {
+  if (yeastType === "ady" && waterTempF < 70) {
     note = "Active dry yeast works best if bloomed separately in warm water first.";
   }
 
@@ -164,7 +177,7 @@ export function calculateWaterTemperature(input: CalculatorInput, waterGrams: nu
     note
   };
 
-  if (input.yeastType === "ady" && waterGrams > 60) {
+  if (yeastType === "ady" && waterGrams > 60) {
     const proofingWaterG = Math.min(50, Math.round(waterGrams * 0.25));
     const remainingWaterG = Math.max(0, Math.round(waterGrams) - proofingWaterG);
     const proofingWaterTempF = 105;
@@ -435,16 +448,17 @@ export function calculateIngredients(input: CalculatorInput, yeastPercent: numbe
   let mainFlour: number | undefined;
   let mainWater: number | undefined;
   let mainYeast: number | undefined;
+  const naturalStarter = isNaturalStarterPreferment(input);
 
   if (input.preferment.kind !== "none") {
     prefermentFlour = Math.round((flour * input.preferment.flourPercent) / 100);
     prefermentWater = Math.round(
       prefermentFlour * (input.preferment.kind === "poolish" ? 1 : input.preferment.bigaHydration / 100)
     );
-    prefermentYeast = Math.max(0.1, round(prefermentFlour * 0.0008, 2));
+    prefermentYeast = naturalStarter ? round(yeast, 1) : Math.max(0.1, round(prefermentFlour * 0.0008, 2));
     mainFlour = Math.max(0, roundedFlour - prefermentFlour);
     mainWater = Math.max(0, roundedWater - prefermentWater);
-    mainYeast = Math.max(0, round(yeast - prefermentYeast, 1));
+    mainYeast = naturalStarter ? 0 : Math.max(0, round(yeast - prefermentYeast, 1));
   }
 
   const totalDoughWeight =
@@ -578,6 +592,12 @@ function yeastLabel(type: YeastType): string {
   return "instant dry yeast";
 }
 
+function prefermentLeaveningLabel(input: CalculatorInput): string {
+  if (input.preferment.bigaStyle === "lievito-madre") return "lievito madre starter";
+  if (input.preferment.bigaStyle === "sauerdough") return "sourdough starter";
+  return "yeast";
+}
+
 export function generateInstructions(
   input: CalculatorInput,
   style: PizzaStyle,
@@ -597,13 +617,16 @@ export function generateInstructions(
       ? "Poolish"
       : input.preferment.bigaStyle === "tiga"
         ? "Tiga"
-        : input.preferment.bigaStyle === "bassinage"
-          ? "Bassinage biga"
+        : input.preferment.bigaStyle === "lievito-madre"
+            ? "Lievito madre"
+            : input.preferment.bigaStyle === "sauerdough"
+              ? "Sourdough"
           : "Biga";
+  const naturalStarter = isNaturalStarterPreferment(input);
 
   if (input.preferment.kind !== "none") {
     instructions.push(
-      `Mix ${prefermentName}: combine ${ingredients.prefermentFlour}g flour (${input.preferment.flourPercent}% of total flour), ${ingredients.prefermentWater}g water, and ${ingredients.prefermentYeast}g yeast. Ferment ${input.preferment.roomHours}h at room temperature${input.preferment.coldHours > 0 ? `, then ${input.preferment.coldHours}h cold` : ""}.`
+      `Mix ${prefermentName}: combine ${ingredients.prefermentFlour}g flour (${input.preferment.flourPercent}% of total flour), ${ingredients.prefermentWater}g water, and ${ingredients.prefermentYeast}g ${prefermentLeaveningLabel(input)}. Ferment ${input.preferment.roomHours}h at room temperature${input.preferment.coldHours > 0 ? `, then ${input.preferment.coldHours}h cold` : ""}.`
     );
   }
 
@@ -621,7 +644,7 @@ export function generateInstructions(
   const waterAmount = input.preferment.kind === "none" ? ingredients.totalWater : ingredients.mainWater;
   const yeast = input.preferment.kind === "none" ? ingredients.totalYeast : ingredients.mainYeast;
   instructions.push(
-    `Mix final dough with ${flour}g ${input.preferment.kind === "none" ? "flour" : "additional flour"}, ${waterAmount}g ${input.preferment.kind === "none" ? "water" : "additional water"}, ${ingredients.totalSalt}g salt, and ${yeast}g ${input.preferment.kind === "none" ? yeastLabel(input.yeastType) : `additional ${yeastLabel(input.yeastType)}`}${input.preferment.kind !== "none" ? ` plus the ripe ${prefermentName}` : ""}.`
+    `Mix final dough with ${flour}g ${input.preferment.kind === "none" ? "flour" : "additional flour"}, ${waterAmount}g ${input.preferment.kind === "none" ? "water" : "additional water"}, ${ingredients.totalSalt}g salt${naturalStarter || !yeast ? "" : `, and ${yeast}g ${input.preferment.kind === "none" ? yeastLabel(input.yeastType) : `additional ${yeastLabel(input.yeastType)}`}`}${input.preferment.kind !== "none" ? `${naturalStarter || !yeast ? ", plus the ripe " : " plus the ripe "}${prefermentName}` : ""}.`
   );
 
   const enrichments = [

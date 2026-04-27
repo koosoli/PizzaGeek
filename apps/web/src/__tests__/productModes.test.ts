@@ -30,14 +30,17 @@ describe("productModes", () => {
   it("returns localized bread profiles for the UI", () => {
     const englishProfiles = getBreadProfiles("en");
     const germanProfiles = getBreadProfiles("de");
+    const italianProfiles = getBreadProfiles("it");
 
     expect(englishProfiles).toHaveLength(10);
     expect(germanProfiles).toHaveLength(10);
+    expect(italianProfiles).toHaveLength(10);
     expect(englishProfiles[0]?.styleId).toBe(STYLE_IDS.FOCACCIA);
     expect(englishProfiles.some((profile) => profile.styleId === STYLE_IDS.CIABATTA)).toBe(true);
     expect(englishProfiles.some((profile) => profile.styleId === STYLE_IDS.SCHIACCIATA)).toBe(true);
     expect(englishProfiles.some((profile) => profile.styleId === STYLE_IDS.COUNTRY_LOAF)).toBe(true);
     expect(englishProfiles[3]?.tags[0]).toContain("hydration");
     expect(germanProfiles[2]?.description).toContain("Kastenlaib");
+    expect(italianProfiles[0]?.kicker).toContain("teglia");
   });
 });

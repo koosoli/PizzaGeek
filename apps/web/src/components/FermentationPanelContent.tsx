@@ -112,27 +112,51 @@ export function getFermentationStageContent(
   const de = {
     bulk: { title: "Stockgare", subtitle: "bei Raumtemperatur" },
     temper: { title: "Temperieren", subtitle: "vor dem Backen akklimatisieren" },
-    "cold-ball": { title: "Kalte Stueckgare", subtitle: "geformte Teiglinge im Kuehlschrank" },
+    "cold-ball": { title: "Kalte Stückgare", subtitle: "geformte Teiglinge im Kühlschrank" },
     "cold-bulk": {
       title: "Kalte Stockgare",
-      subtitle: "Teig als Masse im Kuehlschrank",
-      note: "Erst als Masse kalt fuhren, danach teilen und rundschleifen. Das bringt bei langen, weichen Teigen oft mehr Struktur."
+      subtitle: "Teig als Masse im Kühlschrank",
+      note: "Erst als Masse kalt führen, danach teilen und rundschleifen. Das bringt bei langen, weichen Teigen oft mehr Struktur."
     },
     cellar: {
       title: "Kellergare",
       subtitle: "10-18°C / 50-65°F",
-      note: "Europaische Methode - langsamer als Raumtemperatur, waermer als der Kuehlschrank."
+      note: "Europäische Methode - langsamer als Raumtemperatur, wärmer als der Kühlschrank."
     }
   } as const;
 
-  return locale === "de" ? de[key] : en[key];
+  const it = {
+    bulk: { title: "Puntata", subtitle: "a temperatura ambiente" },
+    temper: { title: "Temperare", subtitle: "riportare in temperatura prima della cottura" },
+    "cold-ball": { title: "Appretto frigo", subtitle: "panetti formati in frigorifero" },
+    "cold-bulk": {
+      title: "Puntata frigo",
+      subtitle: "impasto in massa in frigorifero",
+      note: "Fermenta in massa, poi dividi e pirlala dopo. Tiene meglio la struttura nelle fermentazioni lunghe e molto idratate."
+    },
+    cellar: {
+      title: "Fermentazione in cantina",
+      subtitle: "10-18°C / 50-65°F",
+      note: "Metodo europeo: più lento della temperatura ambiente, più caldo del frigorifero."
+    }
+  } as const;
+
+  if (locale === "de") return de[key];
+  if (locale === "it") return it[key];
+  return en[key];
 }
 
 function getHumidityHint(zone: "room" | "cellar" | "fridge", locale: LocaleCode) {
   if (locale === "de") {
-    if (zone === "room") return "Unter 45% verhaeutet der Teig schneller. Gut abdecken.";
+    if (zone === "room") return "Unter 45% verhautet der Teig schneller. Gut abdecken.";
     if (zone === "cellar") return "Hohe Feuchte bremst Austrocknung, macht den Teig aber klebriger.";
-    return "Trockene Kuehlschraenke ziehen Feuchte stark. Boxen gut schliessen.";
+    return "Trockene Kühlschränke ziehen Feuchte stark. Boxen gut schließen.";
+  }
+
+  if (locale === "it") {
+    if (zone === "room") return "Sotto il 45% UR l'impasto asciuga più in fretta. Coprilo bene.";
+    if (zone === "cellar") return "Più umidità riduce l'asciugatura ma può rendere l'impasto più appiccicoso.";
+    return "I frigoriferi asciutti tirano via umidità velocemente. I contenitori ben chiusi contano molto.";
   }
 
   if (zone === "room") return "Below 45% RH the dough skins faster. Keep it covered.";
@@ -144,9 +168,19 @@ function getEnvironmentPresetCopy(id: EnvironmentPresetId, locale: LocaleCode) {
   if (locale === "de") {
     const labels: Record<EnvironmentPresetId, { label: string; note: string }> = {
       "dry-home": { label: "Trockene Wohnung", note: "Winterluft, mehr Hautbildung" },
-      "balanced-kitchen": { label: "Normale Kueche", note: "Ausgewogener Standard" },
-      "humid-summer": { label: "Schwueler Sommer", note: "Warm und feucht" },
-      "proofing-box": { label: "Gaerbox", note: "Warm und kontrolliert" }
+      "balanced-kitchen": { label: "Normale Küche", note: "Ausgewogener Standard" },
+      "humid-summer": { label: "Schwüler Sommer", note: "Warm und feucht" },
+      "proofing-box": { label: "Gärbox", note: "Warm und kontrolliert" }
+    };
+    return labels[id];
+  }
+
+  if (locale === "it") {
+    const labels: Record<EnvironmentPresetId, { label: string; note: string }> = {
+      "dry-home": { label: "Casa secca", note: "aria invernale, più crosta" },
+      "balanced-kitchen": { label: "Cucina equilibrata", note: "buon punto di partenza" },
+      "humid-summer": { label: "Estate umida", note: "caldo e appiccicoso" },
+      "proofing-box": { label: "Box di lievitazione", note: "caldo e controllato" }
     };
     return labels[id];
   }
@@ -210,11 +244,13 @@ export function FermentationPanelContent({
       {showFermentationDetails ? (
         <>
           <div className="panelMetaRow">
-            <strong>{locale === "de" ? "Umgebung" : "Environment"}</strong>
+            <strong>{locale === "de" ? "Umgebung" : locale === "it" ? "Ambiente" : "Environment"}</strong>
             <span className="sectionMeta">
               {locale === "de"
-                ? "Schnellprofile fuer Temperatur und Luftfeuchte."
-                : "Quick profiles for temperature and humidity."}
+                ? "Schnellprofile für Temperatur und Luftfeuchte."
+                : locale === "it"
+                  ? "Profili rapidi per temperatura e umidità."
+                  : "Quick profiles for temperature and humidity."}
             </span>
           </div>
           <div className="plannerShortcutGrid">
@@ -231,7 +267,7 @@ export function FermentationPanelContent({
           <div className="fermentGrid">
             <FermentationStageCard {...getFermentationStageContent("bulk", locale)}>
               <Field
-                label={locale === "de" ? "Dauer" : "Hours"}
+                label={locale === "de" ? "Dauer" : locale === "it" ? "Ore" : "Hours"}
                 value={fermentation.roomTempHours}
                 suffix="h"
                 step={0.5}
@@ -257,7 +293,7 @@ export function FermentationPanelContent({
             </FermentationStageCard>
             <FermentationStageCard {...getFermentationStageContent("temper", locale)}>
               <Field
-                label={locale === "de" ? "Dauer" : "Hours"}
+                label={locale === "de" ? "Dauer" : locale === "it" ? "Ore" : "Hours"}
                 value={fermentation.finalRiseHours}
                 suffix="h"
                 step={0.5}
@@ -283,7 +319,7 @@ export function FermentationPanelContent({
             </FermentationStageCard>
             <FermentationStageCard {...getFermentationStageContent("cold-ball", locale)}>
               <Field
-                label={locale === "de" ? "Dauer" : "Hours"}
+                label={locale === "de" ? "Dauer" : locale === "it" ? "Ore" : "Hours"}
                 value={fermentation.coldBallHours}
                 suffix="h"
                 step={0.5}
@@ -309,7 +345,7 @@ export function FermentationPanelContent({
             </FermentationStageCard>
             <FermentationStageCard {...getFermentationStageContent("cold-bulk", locale)}>
               <Field
-                label={locale === "de" ? "Dauer" : "Hours"}
+                label={locale === "de" ? "Dauer" : locale === "it" ? "Ore" : "Hours"}
                 value={fermentation.coldBulkHours}
                 suffix="h"
                 step={0.5}
@@ -335,7 +371,7 @@ export function FermentationPanelContent({
             </FermentationStageCard>
             <FermentationStageCard {...getFermentationStageContent("cellar", locale)}>
               <Field
-                label={locale === "de" ? "Dauer" : "Hours"}
+                label={locale === "de" ? "Dauer" : locale === "it" ? "Ore" : "Hours"}
                 value={fermentation.cellarTempHours}
                 suffix="h"
                 step={0.5}

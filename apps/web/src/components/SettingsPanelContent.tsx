@@ -15,6 +15,7 @@ type SettingsPanelContentProps = {
     language: string;
     english: string;
     german: string;
+    italian: string;
     theme: string;
     dark: string;
     light: string;
@@ -99,6 +100,7 @@ export function SettingsPanelContent({
         <SelectField label={labels.language} value={language} onChange={(value) => onLanguageChange(value as LocaleCode)}>
           <option value="en">{labels.english}</option>
           <option value="de">{labels.german}</option>
+          <option value="it">{labels.italian}</option>
         </SelectField>
         <SelectField label={labels.theme} value={theme} onChange={(value) => onThemeChange(value as ThemeMode)}>
           <option value="dark">{labels.dark}</option>

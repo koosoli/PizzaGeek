@@ -8,7 +8,8 @@ function addMinutes(date: Date, minutes: number): Date {
 function prefermentLabel(input: CalculatorInput): string {
   if (input.preferment.kind === "poolish") return "Poolish";
   if (input.preferment.bigaStyle === "tiga") return "Tiga";
-  if (input.preferment.bigaStyle === "bassinage") return "Bassinage biga";
+  if (input.preferment.bigaStyle === "lievito-madre") return "Lievito madre";
+  if (input.preferment.bigaStyle === "sauerdough") return "Sourdough";
   return "Biga";
 }
 
