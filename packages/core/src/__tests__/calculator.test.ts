@@ -247,6 +247,26 @@ describe("calculateDough", () => {
     expect(result.flourBlend.description).toContain("All Trumps");
   });
 
+  it("supports combined preferment stages like poolish plus biga", () => {
+    const input = createDefaultInput(STYLE_IDS.NEW_YORK);
+    input.preferment.kind = "none";
+    input.preferments = [
+      { kind: "poolish", flourPercent: 30, bigaHydration: 100, bigaStyle: "standard", starterInoculationPercent: 20, roomHours: 12, coldHours: 0 },
+      { kind: "biga", flourPercent: 50, bigaHydration: 55, bigaStyle: "standard", starterInoculationPercent: 20, roomHours: 24, coldHours: 12 }
+    ];
+
+    const result = calculateDough(input);
+
+    expect(result.ingredients.prefermentStages).toHaveLength(2);
+    expect(result.ingredients.prefermentFlour).toBe(
+      result.ingredients.prefermentStages?.reduce((sum, stage) => sum + stage.flour, 0)
+    );
+    expect(result.ingredients.mainFlour).toBe(result.ingredients.totalFlour - (result.ingredients.prefermentFlour ?? 0));
+    expect(result.ingredients.prefermentStages?.[0]?.label).toBe("Poolish");
+    expect(result.ingredients.prefermentStages?.[1]?.label).toBe("Biga");
+    expect(result.ingredients.prefermentStages?.[0]?.water).toBe(result.ingredients.prefermentStages?.[0]?.flour);
+  });
+
   it("analyzes weak flour for long high-hydration ferments", () => {
     const input = createDefaultInput(STYLE_IDS.ROMAN);
     input.flourBlend = [{ flourId: "plain-flour", percentage: 100 }];
@@ -311,6 +331,24 @@ describe("buildBakePlan", () => {
     expect(labels).toContain("Final Proof");
     expect(plan.find((step) => step.label === "Final shape")?.description).toContain("tin");
     expect(plan.at(-1)?.description).toContain("cool before slicing");
+  });
+
+  it("sequences multiple preferment stages before the final dough", () => {
+    const input = createDefaultInput(STYLE_IDS.NEW_YORK);
+    input.preferment.kind = "none";
+    input.preferments = [
+      { kind: "poolish", flourPercent: 30, bigaHydration: 100, bigaStyle: "standard", starterInoculationPercent: 20, roomHours: 12, coldHours: 0 },
+      { kind: "biga", flourPercent: 50, bigaHydration: 55, bigaStyle: "standard", starterInoculationPercent: 20, roomHours: 24, coldHours: 12 }
+    ];
+
+    const plan = buildBakePlan(input, "starting-now", new Date("2026-04-26T10:00:00"));
+    const labels = plan.map((step) => step.label);
+
+    expect(labels).toEqual(
+      expect.arrayContaining(["Mix Poolish", "Poolish ferments", "Mix Biga", "Biga ferments", "Biga cold ferment", "Mix final dough"])
+    );
+    expect(labels.indexOf("Mix Poolish")).toBeLessThan(labels.indexOf("Mix Biga"));
+    expect(labels.indexOf("Mix Biga")).toBeLessThan(labels.indexOf("Mix final dough"));
   });
 });
 

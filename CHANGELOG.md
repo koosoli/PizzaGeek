@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0 - 2026-04-27
+
+- Added richer planner workflow controls, including collapsible baker notes, per-step done/skip/reset actions, and clearer process status tracking
+- Surfaced hydration more clearly in the recipe sheet and expanded planner summaries so print/export output carries more of the live workflow context
+- Added a dedicated preferment planning window to the planner so bakers can see the best mixing and use window separately from the main dough schedule
+- Renamed the dough studio section to cover preferment and final dough more accurately instead of implying only one flour stage
+- Extended the dough model to support combined preferment workflows, including mixes like partial biga plus poolish, while keeping older saved recipes backward compatible
+- Updated calculator, planner, and recipe text generation so multiple preferment stages are reflected consistently across the app and covered by regression tests
+
 ## 0.5.0 - 2026-04-27
 
 - Split flour blending by stage so preferments and main dough can use different flour mixes without breaking older saved recipes that still rely on the legacy shared blend

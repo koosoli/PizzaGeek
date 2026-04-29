@@ -1,22 +1,28 @@
 import { isLoafStyleId, isTinLoafStyleId } from "../data/styles";
-import type { BakeStep, CalculatorInput, ScheduleMode } from "./types";
+import type { BakeStep, CalculatorInput, PrefermentOptions, ScheduleMode } from "./types";
 
 function addMinutes(date: Date, minutes: number): Date {
   return new Date(date.getTime() + minutes * 60_000);
 }
 
-function prefermentLabel(input: CalculatorInput): string {
-  if (input.preferment.kind === "poolish") return "Poolish";
-  if (input.preferment.bigaStyle === "tiga") return "Tiga";
-  if (input.preferment.bigaStyle === "lievito-madre") return "Lievito madre";
-  if (input.preferment.bigaStyle === "sauerdough") return "Sourdough";
+function getActivePreferments(input: CalculatorInput): PrefermentOptions[] {
+  const preferments = input.preferments?.length ? input.preferments : [input.preferment];
+  return preferments.filter((preferment) => preferment.kind !== "none" && preferment.flourPercent > 0);
+}
+
+function prefermentLabel(preferment: PrefermentOptions): string {
+  if (preferment.kind === "poolish") return "Poolish";
+  if (preferment.bigaStyle === "tiga") return "Tiga";
+  if (preferment.bigaStyle === "lievito-madre") return "Lievito madre";
+  if (preferment.bigaStyle === "sauerdough") return "Sourdough";
   return "Biga";
 }
 
 function mixDurationMinutes(input: CalculatorInput): number {
-  if (input.mixerType === "hand") return input.preferment.kind === "none" ? 35 : 15;
-  if (input.mixerType === "spiral") return input.preferment.kind === "none" ? 12 : 8;
-  return input.preferment.kind === "none" ? 15 : 10;
+  const hasPreferments = getActivePreferments(input).length > 0;
+  if (input.mixerType === "hand") return hasPreferments ? 15 : 35;
+  if (input.mixerType === "spiral") return hasPreferments ? 8 : 12;
+  return hasPreferments ? 10 : 15;
 }
 
 export function buildBakePlan(
@@ -25,35 +31,36 @@ export function buildBakePlan(
   anchorDate = new Date()
 ): BakeStep[] {
   const steps: Omit<BakeStep, "time">[] = [];
-  const preferment = prefermentLabel(input);
+  const preferments = getActivePreferments(input);
   const loafWorkflow = isLoafStyleId(input.styleId);
   const tinLoaf = isTinLoafStyleId(input.styleId);
 
-  if (input.preferment.kind !== "none") {
+  for (const preferment of preferments) {
+    const label = prefermentLabel(preferment);
     steps.push({
-      label: `Mix ${preferment}`,
-      description: `Prepare the ${preferment.toLowerCase()} starter.`,
+      label: `Mix ${label}`,
+      description: `Prepare the ${label.toLowerCase()} starter.`,
       durationMinutes: 10,
       type: "action"
     });
     steps.push({
-      label: `${preferment} ferments`,
-      description: `${input.preferment.roomHours}h at room temperature.`,
-      durationMinutes: input.preferment.roomHours * 60,
+      label: `${label} ferments`,
+      description: `${preferment.roomHours}h at room temperature.`,
+      durationMinutes: preferment.roomHours * 60,
       type: "timed"
     });
-    if (input.preferment.coldHours > 0) {
+    if (preferment.coldHours > 0) {
       steps.push({
-        label: `${preferment} cold ferment`,
-        description: `${input.preferment.coldHours}h refrigerated.`,
-        durationMinutes: input.preferment.coldHours * 60,
+        label: `${label} cold ferment`,
+        description: `${preferment.coldHours}h refrigerated.`,
+        durationMinutes: preferment.coldHours * 60,
         type: "timed"
       });
     }
   }
 
   steps.push({
-    label: input.preferment.kind === "none" ? "Mix and knead" : "Mix final dough",
+    label: preferments.length === 0 ? "Mix and knead" : "Mix final dough",
     description:
       input.mixerType === "hand"
         ? "Combine, rest, then knead or fold until smooth."

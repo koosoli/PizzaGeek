@@ -46,7 +46,7 @@ That split is intentional: a future `apps/mobile` client can reuse the same calc
 
 ## Release Notes
 
-Current release: `v0.5.0`
+Current release: `v0.6.0`
 
 See [CHANGELOG.md](./CHANGELOG.md) for the latest release notes.
 

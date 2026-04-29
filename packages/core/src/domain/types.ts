@@ -100,6 +100,16 @@ export interface PrefermentOptions {
   coldHours: number;
 }
 
+export interface PrefermentStageBreakdown {
+  label: string;
+  flourPercent: number;
+  flour: number;
+  water: number;
+  yeast: number;
+  roomHours: number;
+  coldHours: number;
+}
+
 export interface FermentationSchedule {
   roomTempHours: number;
   cellarTempHours: number;
@@ -169,6 +179,7 @@ export interface CalculatorInput {
   mixerType: MixerType;
   fermentation: FermentationSchedule;
   preferment: PrefermentOptions;
+  preferments?: PrefermentOptions[];
   flourBlendEnabled: boolean;
   flourBlend: FlourBlendItem[];
   prefermentFlourBlend: FlourBlendItem[];
@@ -192,6 +203,7 @@ export interface IngredientBreakdown {
   totalLard: number;
   totalMilkPowder: number;
   totalDoughWeight: number;
+  prefermentStages?: PrefermentStageBreakdown[];
   prefermentFlour?: number;
   prefermentWater?: number;
   prefermentYeast?: number;

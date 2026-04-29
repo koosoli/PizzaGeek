@@ -39,6 +39,7 @@ type RecipeSheetPanelContentProps = {
   waterSummary: RecipeWaterSummary;
   prefermentSummary?: RecipeSummaryBlock;
   flourBlendSummary?: RecipeSummaryBlock;
+  plannerSummary?: RecipeSummaryBlock;
   sauceSummary?: RecipeSummaryBlock;
   onCopy: () => void;
   onExport: () => void;
@@ -55,6 +56,7 @@ export function RecipeSheetPanelContent({
   waterSummary,
   prefermentSummary,
   flourBlendSummary,
+  plannerSummary,
   sauceSummary,
   onCopy,
   onExport,
@@ -105,6 +107,7 @@ export function RecipeSheetPanelContent({
 
       {prefermentSummary ? <SummaryBlock {...prefermentSummary} /> : null}
       {flourBlendSummary ? <SummaryBlock {...flourBlendSummary} /> : null}
+      {plannerSummary ? <SummaryBlock {...plannerSummary} /> : null}
       {sauceSummary ? <SummaryBlock {...sauceSummary} /> : null}
     </>
   );

@@ -1249,6 +1249,7 @@ textarea {
   list-style: none;
   padding-left: 0;
   margin-top: 14px;
+  gap: 12px;
 }
 
 .plannerSummaryGrid {
@@ -1256,6 +1257,10 @@ textarea {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-top: 14px;
+}
+
+.prefermentWindowGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .plannerSummaryCard {
@@ -1285,6 +1290,54 @@ textarea {
   display: grid;
   gap: 12px;
   margin-top: 16px;
+}
+
+.plannerProcessSection {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.plannerProcessGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.plannerStageCard {
+  min-height: 104px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-soft);
+  display: grid;
+  gap: 6px;
+}
+
+.plannerStageCard.active {
+  border-color: rgba(196, 90, 43, 0.38);
+  background: linear-gradient(180deg, rgba(196, 90, 43, 0.14), rgba(196, 90, 43, 0.04)), var(--surface-strong);
+}
+
+.plannerStageCard.queued {
+  border-color: rgba(169, 123, 32, 0.34);
+}
+
+.plannerStageCard span {
+  color: var(--soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.plannerStageCard strong {
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.plannerStageCard p {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .plannerQuickSection .panelMetaRow strong {
@@ -1325,19 +1378,212 @@ textarea {
   background: linear-gradient(180deg, rgba(196, 90, 43, 0.12), rgba(196, 90, 43, 0.02)), var(--surface-strong);
 }
 
-.timeline li {
+.timelineCard {
   display: grid;
-  grid-template-columns: 140px minmax(0, 1fr);
-  gap: 4px 14px;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(27, 24, 19, 0.08);
+  grid-template-columns: 136px minmax(0, 1fr);
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-soft);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.timelineCard.current {
+  border-color: rgba(196, 90, 43, 0.42);
+  background: linear-gradient(180deg, rgba(196, 90, 43, 0.12), rgba(196, 90, 43, 0.02)), var(--surface-strong);
+}
+
+.timelineCard.next {
+  border-color: rgba(169, 123, 32, 0.34);
+}
+
+.timelineCard.past {
+  opacity: 0.82;
+}
+
+.timelineRail {
+  display: grid;
+  align-content: start;
 }
 
 .timeline time {
   color: var(--accent);
   font-size: 12px;
   font-weight: 800;
-  grid-row: span 2;
+}
+
+.timelineBody {
+  display: grid;
+  gap: 8px;
+}
+
+.timelineActionRow {
+  display: grid;
+  gap: 8px;
+}
+
+.plannerInlineButton {
+  width: 100%;
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ink);
+  padding: 10px 12px;
+}
+
+.timelineNoteToggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+}
+
+.timelineNoteToggle.open {
+  border-style: solid;
+  border-color: rgba(196, 90, 43, 0.26);
+  background: rgba(196, 90, 43, 0.08);
+}
+
+.timelineNotePreview {
+  min-width: 0;
+  color: var(--soft);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.timelineToggleLabel {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.timelineStepActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.plannerMiniButton {
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.plannerMiniButton.subtle {
+  color: var(--muted);
+}
+
+.timelineNoteField {
+  margin-top: 2px;
+}
+
+.timelineNoteField textarea {
+  min-height: 88px;
+  margin: 0;
+}
+
+.timelineCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.timelineCardHeader strong {
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.timelineMetaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.timelineMetaText {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.plannerChip {
+  min-height: 24px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+}
+
+.plannerChip.kind.action {
+  background: rgba(69, 107, 66, 0.14);
+  color: #a9d3a4;
+  border-color: rgba(69, 107, 66, 0.26);
+}
+
+.plannerChip.kind.timed {
+  background: rgba(169, 123, 32, 0.14);
+  color: #e6c56e;
+  border-color: rgba(169, 123, 32, 0.24);
+}
+
+.plannerChip.kind.ready {
+  background: rgba(196, 90, 43, 0.14);
+  color: #ffc3ab;
+  border-color: rgba(196, 90, 43, 0.28);
+}
+
+.plannerChip.status.past {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--soft);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.plannerChip.status.current {
+  background: rgba(196, 90, 43, 0.16);
+  color: #ffc3ab;
+  border-color: rgba(196, 90, 43, 0.3);
+}
+
+.plannerChip.status.next {
+  background: rgba(169, 123, 32, 0.16);
+  color: #e6c56e;
+  border-color: rgba(169, 123, 32, 0.28);
+}
+
+.plannerChip.status.future {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.plannerChip.progress.done {
+  background: rgba(69, 107, 66, 0.16);
+  color: #a9d3a4;
+  border-color: rgba(69, 107, 66, 0.28);
+}
+
+.plannerChip.progress.skipped {
+  background: rgba(124, 132, 143, 0.16);
+  color: #d3dae2;
+  border-color: rgba(124, 132, 143, 0.28);
 }
 
 .saveRow {
@@ -1491,15 +1737,17 @@ textarea {
   .guidanceGrid,
   .summaryGrid,
   .plannerSummaryGrid,
+  .plannerProcessGrid,
   .blendRow,
   .sauceDetailGrid,
   .printColumns,
-  .timeline li {
+  .timelineCard {
     grid-template-columns: 1fr;
   }
 
-  .timeline time {
-    grid-row: auto;
+  .timelineCardHeader {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .photoPreview {

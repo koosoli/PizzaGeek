@@ -256,6 +256,7 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
     mixerType: "planetary",
     fermentation: scheduleFromPreset(preset),
     preferment: defaultPreferment(),
+    preferments: [],
     flourBlendEnabled: true,
     flourBlend: defaultBlend,
     prefermentFlourBlend: defaultBlend,
