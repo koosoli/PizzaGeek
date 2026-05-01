@@ -1,6 +1,6 @@
 import { createDefaultInput, STYLE_IDS, type CalculatorInput } from "@pizza-geek/core";
 import { describe, expect, it } from "vitest";
-import { normalizeCalculatorInput } from "../calculatorInput";
+import { applySinglePrefermentPatch, normalizeCalculatorInput } from "../calculatorInput";
 
 describe("normalizeCalculatorInput", () => {
   it("drops removed flour ids from persisted blends", () => {
@@ -48,6 +48,34 @@ describe("normalizeCalculatorInput", () => {
     const normalized = normalizeCalculatorInput(candidate);
 
     expect(normalized.preferments?.[0]?.starterInoculationPercent).toBe(50);
+  });
+
+  it("keeps the single preferment editor in sync with the preferments array", () => {
+    const candidate = createDefaultInput(STYLE_IDS.NEW_YORK);
+    candidate.preferment = {
+      ...candidate.preferment,
+      kind: "poolish",
+      bigaHydration: 100
+    };
+    candidate.preferments = [{
+      ...candidate.preferment,
+      kind: "poolish",
+      bigaHydration: 100
+    }];
+
+    const updated = applySinglePrefermentPatch(candidate, {
+      kind: "biga",
+      bigaStyle: "standard",
+      bigaHydration: 55
+    });
+
+    expect(updated.preferment.kind).toBe("biga");
+    expect(updated.preferments).toEqual([expect.objectContaining({ kind: "biga", bigaStyle: "standard", bigaHydration: 55 })]);
+
+    const cleared = applySinglePrefermentPatch(updated, { kind: "none" });
+
+    expect(cleared.preferment.kind).toBe("none");
+    expect(cleared.preferments).toEqual([]);
   });
 
   it("converts legacy single pizza oven temperatures into split stone and top values", () => {

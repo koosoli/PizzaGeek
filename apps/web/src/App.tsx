@@ -95,7 +95,7 @@ import { type PrefermentMode, type NaturalStarterChoice, getPrefermentModeFromSt
 import { convertPanToUnit } from "./pan";
 import { getSauceStyleLabel, getSauceUiCopy, localizeSauceOption, localizeSauceSaltWarning } from "./sauceText";
 import { buildQualitySignals, getHydrationWorkabilityNotice, type QualitySignal } from "./quality";
-import { inferSauceStyleFromOption, normalizeCalculatorInput } from "./calculatorInput";
+import { applySinglePrefermentPatch, inferSauceStyleFromOption, normalizeCalculatorInput } from "./calculatorInput";
 import { formatBakeWindow, getEnrichmentHint, getMethodSteps, getOvenDetailText, getWaterSummaryText, localizePlanStep, localizeWaterMessage } from "./recipeText";
 
 type BlendTarget = "prefermentFlourBlend" | "mainDoughFlourBlend";
@@ -690,16 +690,7 @@ export function App() {
   };
 
   const setPreferment = (patch: Partial<CalculatorInput["preferment"]>) => {
-    setInput((current) => {
-      const normalized = normalizeCalculatorInput(current);
-      return {
-        ...normalized,
-        preferment: {
-          ...normalized.preferment,
-          ...patch
-        }
-      };
-    });
+    setInput((current) => applySinglePrefermentPatch(current, patch));
   };
 
   const setPan = (patch: Partial<CalculatorInput["pan"]>) => {

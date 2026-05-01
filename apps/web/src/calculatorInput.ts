@@ -123,3 +123,20 @@ export function normalizeCalculatorInput(candidate: CalculatorInput): Calculator
     }
   };
 }
+
+export function applySinglePrefermentPatch(
+  current: CalculatorInput,
+  patch: Partial<CalculatorInput["preferment"]>
+): CalculatorInput {
+  const normalized = normalizeCalculatorInput(current);
+  const nextPreferment = {
+    ...normalized.preferment,
+    ...patch
+  };
+
+  return {
+    ...normalized,
+    preferment: nextPreferment,
+    preferments: nextPreferment.kind === "none" ? [] : [nextPreferment]
+  };
+}

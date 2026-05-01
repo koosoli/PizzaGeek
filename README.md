@@ -29,6 +29,8 @@ npm run dev
 
 Then open [http://localhost:5173](http://localhost:5173).
 
+On Windows you can also run `run-pizza-geek.bat` from the repo root. It starts the dev server in a new terminal, waits for the app to come up, and opens `http://localhost:5173/` in a browser window.
+
 ## Checks
 
 ```bash
