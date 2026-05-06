@@ -607,12 +607,15 @@ export function calculateDough(input: CalculatorInput): DoughResult {
     throw new Error("Dough balls and ball weight must be positive.");
   }
 
-  const legacyBlend = normalizeBlend(input.flourBlend);
+  const customFlours = input.customFlours ?? [];
+  const legacyBlend = normalizeBlend(input.flourBlend, customFlours);
   const prefermentBlendCandidate = normalizeBlend(
-    input.prefermentFlourBlend?.length ? input.prefermentFlourBlend : input.flourBlend
+    input.prefermentFlourBlend?.length ? input.prefermentFlourBlend : input.flourBlend,
+    customFlours
   );
   const mainDoughBlendCandidate = normalizeBlend(
-    input.mainDoughFlourBlend?.length ? input.mainDoughFlourBlend : input.flourBlend
+    input.mainDoughFlourBlend?.length ? input.mainDoughFlourBlend : input.flourBlend,
+    customFlours
   );
   const useLegacyBlend =
     sameBlend(prefermentBlendCandidate, mainDoughBlendCandidate) && !sameBlend(prefermentBlendCandidate, legacyBlend);
@@ -626,14 +629,15 @@ export function calculateDough(input: CalculatorInput): DoughResult {
       : combineBlendSegments([
           { blend: prefermentBlend, weight: totalPrefermentPercent },
           { blend: mainDoughBlend, weight: Math.max(0, 100 - totalPrefermentPercent) }
-        ]);
+        ], customFlours);
   const coldHours = input.fermentation.coldBulkHours + input.fermentation.coldBallHours;
   const flourBlend = analyzeFlourBlend(
     normalizedBlend,
     input.fermentation.roomTempHours,
     coldHours,
     input.hydrationPercent,
-    input.flourBlendEnabled
+    input.flourBlendEnabled,
+    customFlours
   );
   const yeastPercent = calculateYeastPercent(input);
   const ingredients = calculateIngredients(input, yeastPercent);

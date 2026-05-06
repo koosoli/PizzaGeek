@@ -78,8 +78,15 @@ export const FLOURS: Flour[] = [
   flour("tipo-00-generic", "Generic", "Tipo 00", "tipo00", 10.5, "W180-220", -2, ["GLOBAL"])
 ];
 
-export function getFlourById(id: string): Flour | undefined {
-  return FLOURS.find((flour) => flour.id === id);
+export function getFlourCatalog(customFlours: Flour[] = []): Flour[] {
+  if (customFlours.length === 0) return FLOURS;
+
+  const customIds = new Set(customFlours.map((flour) => flour.id));
+  return [...customFlours, ...FLOURS.filter((flour) => !customIds.has(flour.id))];
+}
+
+export function getFlourById(id: string, customFlours: Flour[] = []): Flour | undefined {
+  return getFlourCatalog(customFlours).find((flour) => flour.id === id);
 }
 
 export function getFloursByRegion(region: string): Flour[] {

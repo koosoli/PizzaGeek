@@ -78,6 +78,30 @@ describe("normalizeCalculatorInput", () => {
     expect(cleared.preferments).toEqual([]);
   });
 
+  it("keeps valid custom flours available to the blend normalizer", () => {
+    const candidate = createDefaultInput(STYLE_IDS.NEW_YORK);
+    candidate.customFlours = [{
+      id: "custom-flour",
+      brand: "Custom",
+      name: "Strong White",
+      type: "bread",
+      proteinPercent: 14,
+      wStrength: "W350",
+      absorptionAdjustment: 3,
+      regions: ["GLOBAL"]
+    }];
+    candidate.flourBlend = [{ flourId: "custom-flour", percentage: 100 }];
+    candidate.prefermentFlourBlend = [{ flourId: "custom-flour", percentage: 100 }];
+    candidate.mainDoughFlourBlend = [{ flourId: "custom-flour", percentage: 100 }];
+
+    const normalized = normalizeCalculatorInput(candidate);
+
+    expect(normalized.customFlours).toEqual(candidate.customFlours);
+    expect(normalized.flourBlend).toEqual([{ flourId: "custom-flour", percentage: 100 }]);
+    expect(normalized.prefermentFlourBlend).toEqual([{ flourId: "custom-flour", percentage: 100 }]);
+    expect(normalized.mainDoughFlourBlend).toEqual([{ flourId: "custom-flour", percentage: 100 }]);
+  });
+
   it("converts legacy single pizza oven temperatures into split stone and top values", () => {
     const candidate = createDefaultInput(STYLE_IDS.NEAPOLITAN) as CalculatorInput & {
       oven: CalculatorInput["oven"] & { pizzaOvenTempF: number };

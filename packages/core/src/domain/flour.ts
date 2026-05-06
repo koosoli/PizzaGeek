@@ -1,5 +1,5 @@
 import { FLOURS, getFlourById } from "../data/flours";
-import type { FlourBlendAnalysis, FlourBlendItem } from "./types";
+import type { Flour, FlourBlendAnalysis, FlourBlendItem } from "./types";
 
 export function parseWStrength(value?: string): number | null {
   if (!value) return null;
@@ -44,13 +44,13 @@ export function getMinimumWForFermentation(roomHours: number, coldHours: number,
   return minimum;
 }
 
-export function calculateBlendedW(blend: FlourBlendItem[]): number | null {
+export function calculateBlendedW(blend: FlourBlendItem[], customFlours: Flour[] = []): number | null {
   if (blend.length === 0) return null;
   let weighted = 0;
   let seen = false;
 
   for (const item of blend) {
-    const flour = getFlourById(item.flourId);
+    const flour = getFlourById(item.flourId, customFlours);
     if (!flour) continue;
     const w = parseWStrength(flour.wStrength) ?? estimateWFromProtein(flour.proteinPercent);
     weighted += w * (item.percentage / 100);
@@ -60,17 +60,17 @@ export function calculateBlendedW(blend: FlourBlendItem[]): number | null {
   return seen ? Math.round(weighted) : null;
 }
 
-export function calculateBlendedAbsorption(blend: FlourBlendItem[]): number {
+export function calculateBlendedAbsorption(blend: FlourBlendItem[], customFlours: Flour[] = []): number {
   return Math.round(
     blend.reduce((sum, item) => {
-      const flour = getFlourById(item.flourId);
+      const flour = getFlourById(item.flourId, customFlours);
       return sum + (flour?.absorptionAdjustment ?? 0) * (item.percentage / 100);
     }, 0) * 10
   ) / 10;
 }
 
-export function normalizeBlend(blend: FlourBlendItem[]): FlourBlendItem[] {
-  const valid = blend.filter((item) => item.percentage > 0 && getFlourById(item.flourId));
+export function normalizeBlend(blend: FlourBlendItem[], customFlours: Flour[] = []): FlourBlendItem[] {
+  const valid = blend.filter((item) => item.percentage > 0 && getFlourById(item.flourId, customFlours));
   const total = valid.reduce((sum, item) => sum + item.percentage, 0);
   if (valid.length === 0 || total <= 0) return [{ flourId: "caputo-pizzeria", percentage: 100 }];
 
@@ -87,13 +87,16 @@ export function normalizeBlend(blend: FlourBlendItem[]): FlourBlendItem[] {
   return normalized;
 }
 
-export function combineBlendSegments(segments: Array<{ blend: FlourBlendItem[]; weight: number }>): FlourBlendItem[] {
+export function combineBlendSegments(
+  segments: Array<{ blend: FlourBlendItem[]; weight: number }>,
+  customFlours: Flour[] = []
+): FlourBlendItem[] {
   const totals = new Map<string, number>();
 
   for (const segment of segments) {
     if (segment.weight <= 0) continue;
 
-    const normalized = normalizeBlend(segment.blend);
+    const normalized = normalizeBlend(segment.blend, customFlours);
     for (const item of normalized) {
       totals.set(item.flourId, (totals.get(item.flourId) ?? 0) + (item.percentage / 100) * segment.weight);
     }
@@ -103,15 +106,16 @@ export function combineBlendSegments(segments: Array<{ blend: FlourBlendItem[]; 
     Array.from(totals.entries()).map(([flourId, percentage]) => ({
       flourId,
       percentage
-    }))
+    })),
+    customFlours
   );
 }
 
-export function describeBlend(blend: FlourBlendItem[]): string {
-  const normalized = normalizeBlend(blend);
+export function describeBlend(blend: FlourBlendItem[], customFlours: Flour[] = []): string {
+  const normalized = normalizeBlend(blend, customFlours);
   return normalized
     .map((item) => {
-      const flour = getFlourById(item.flourId);
+      const flour = getFlourById(item.flourId, customFlours);
       return `${item.percentage}% ${flour ? `${flour.brand} ${flour.name}` : item.flourId}`;
     })
     .join(" + ");
@@ -122,12 +126,13 @@ export function analyzeFlourBlend(
   roomHours: number,
   coldHours: number,
   hydration: number,
-  enabled = true
+  enabled = true,
+  customFlours: Flour[] = []
 ): FlourBlendAnalysis {
-  const normalized = normalizeBlend(blend);
-  const blendedW = enabled ? calculateBlendedW(normalized) : null;
+  const normalized = normalizeBlend(blend, customFlours);
+  const blendedW = enabled ? calculateBlendedW(normalized, customFlours) : null;
   const requiredW = getMinimumWForFermentation(roomHours, coldHours, hydration);
-  const absorptionAdjustment = enabled ? calculateBlendedAbsorption(normalized) : 0;
+  const absorptionAdjustment = enabled ? calculateBlendedAbsorption(normalized, customFlours) : 0;
 
   if (!enabled || blendedW === null) {
     return {
@@ -155,7 +160,7 @@ export function analyzeFlourBlend(
   }
 
   return {
-    description: describeBlend(normalized),
+    description: describeBlend(normalized, customFlours),
     blendedW,
     absorptionAdjustment,
     warning,

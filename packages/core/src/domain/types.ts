@@ -181,6 +181,7 @@ export interface CalculatorInput {
   preferment: PrefermentOptions;
   preferments?: PrefermentOptions[];
   flourBlendEnabled: boolean;
+  customFlours?: Flour[];
   flourBlend: FlourBlendItem[];
   prefermentFlourBlend: FlourBlendItem[];
   mainDoughFlourBlend: FlourBlendItem[];

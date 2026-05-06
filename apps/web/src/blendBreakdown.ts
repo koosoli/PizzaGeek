@@ -1,4 +1,4 @@
-import { FLOURS, type FlourBlendItem } from "@pizza-geek/core";
+import { getFlourById, type Flour, type FlourBlendItem } from "@pizza-geek/core";
 import { clampTo } from "./appHelpers";
 
 export type BlendBreakdownRow = {
@@ -86,13 +86,17 @@ function allocateBlendGrams(blend: FlourBlendItem[], totalGrams: number): number
   return grams;
 }
 
-export function buildStageBlendBreakdown(blend: FlourBlendItem[], totalGrams: number): StageBlendBreakdownRow[] {
+export function buildStageBlendBreakdown(
+  blend: FlourBlendItem[],
+  totalGrams: number,
+  customFlours: Flour[] = []
+): StageBlendBreakdownRow[] {
   const grams = allocateBlendGrams(blend, totalGrams);
 
   return blend.map((item, index) => ({
     flourId: item.flourId,
     percentage: item.percentage,
-    flourLabel: getFlourLabel(item.flourId),
+    flourLabel: getFlourLabel(item.flourId, customFlours),
     grams: grams[index] ?? 0
   }));
 }
@@ -100,7 +104,8 @@ export function buildStageBlendBreakdown(blend: FlourBlendItem[], totalGrams: nu
 export function mergeBlendBreakdowns(
   overallBlend: FlourBlendItem[],
   prefermentRows: StageBlendBreakdownRow[],
-  mainDoughRows: StageBlendBreakdownRow[]
+  mainDoughRows: StageBlendBreakdownRow[],
+  customFlours: Flour[] = []
 ): BlendBreakdownRow[] {
   const rows = new Map<string, BlendBreakdownRow>();
 
@@ -108,7 +113,7 @@ export function mergeBlendBreakdowns(
     rows.set(item.flourId, {
       flourId: item.flourId,
       percentage: item.percentage,
-      flourLabel: getFlourLabel(item.flourId),
+      flourLabel: getFlourLabel(item.flourId, customFlours),
       totalGrams: 0,
       prefermentGrams: 0,
       mainDoughGrams: 0
@@ -145,7 +150,7 @@ export function mergeBlendBreakdowns(
   return Array.from(rows.values()).filter((row) => row.totalGrams > 0 || row.percentage > 0);
 }
 
-export function getFlourLabel(flourId: string): string {
-  const flour = FLOURS.find((entry) => entry.id === flourId);
+export function getFlourLabel(flourId: string, customFlours: Flour[] = []): string {
+  const flour = getFlourById(flourId, customFlours);
   return flour ? `${flour.brand} ${flour.name}` : flourId;
 }

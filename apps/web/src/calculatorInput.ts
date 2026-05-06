@@ -7,6 +7,7 @@ import {
   type CalculatorInput,
   type SauceRecipeOption
 } from "@pizza-geek/core";
+import { normalizeCustomFlours } from "./flourCatalog";
 import { getDefaultStarterInoculationPercent, getPrefermentModeFromStage } from "./preferment";
 
 export function inferSauceStyleFromOption(option?: SauceRecipeOption): CalculatorInput["sauce"]["style"] {
@@ -36,6 +37,7 @@ export function inferSauceStyleFromOption(option?: SauceRecipeOption): Calculato
 export function normalizeCalculatorInput(candidate: CalculatorInput): CalculatorInput {
   const styleId = candidate?.styleId ?? createDefaultInput().styleId;
   const base = createDefaultInput(styleId);
+  const customFlours = normalizeCustomFlours(candidate?.customFlours);
   const legacyPizzaOvenTemp = (candidate as CalculatorInput & { oven?: { pizzaOvenTempF?: number } }).oven
     ?.pizzaOvenTempF;
   const legacyPreferment = {
@@ -73,12 +75,12 @@ export function normalizeCalculatorInput(candidate: CalculatorInput): Calculator
     ...candidate?.sauce
   };
   const normalizedSauceOption = getSauceOption(styleId, sauce.recipeId);
-  const legacyBlend = candidate?.flourBlend?.length ? normalizeBlend(candidate.flourBlend) : base.flourBlend;
+  const legacyBlend = candidate?.flourBlend?.length ? normalizeBlend(candidate.flourBlend, customFlours) : base.flourBlend;
   const prefermentFlourBlend = candidate?.prefermentFlourBlend?.length
-    ? normalizeBlend(candidate.prefermentFlourBlend)
+    ? normalizeBlend(candidate.prefermentFlourBlend, customFlours)
     : legacyBlend;
   const mainDoughFlourBlend = candidate?.mainDoughFlourBlend?.length
-    ? normalizeBlend(candidate.mainDoughFlourBlend)
+    ? normalizeBlend(candidate.mainDoughFlourBlend, customFlours)
     : legacyBlend;
   const totalPrefermentPercent = preferments.reduce((sum, preferment) => sum + preferment.flourPercent, 0);
   const flourBlend =
@@ -87,7 +89,7 @@ export function normalizeCalculatorInput(candidate: CalculatorInput): Calculator
       : combineBlendSegments([
           { blend: prefermentFlourBlend, weight: totalPrefermentPercent },
           { blend: mainDoughFlourBlend, weight: Math.max(0, 100 - totalPrefermentPercent) }
-        ]);
+        ], customFlours);
 
   return {
     ...base,
@@ -105,6 +107,7 @@ export function normalizeCalculatorInput(candidate: CalculatorInput): Calculator
       recipeId: normalizedSauceOption?.id ?? sauce.recipeId,
       style: normalizedSauceOption ? inferSauceStyleFromOption(normalizedSauceOption) : sauce.style
     },
+    customFlours,
     flourBlend,
     prefermentFlourBlend,
     mainDoughFlourBlend,
