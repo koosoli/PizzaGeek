@@ -1,6 +1,7 @@
-import { describeBlend, getSauceOption, type BakeStep, type CalculatorInput, type DoughResult, type TemperatureUnit } from "@pizza-geek/core";
+import { getSauceOption, type BakeStep, type CalculatorInput, type DoughResult, type TemperatureUnit } from "@pizza-geek/core";
 import type { LocaleCode } from "./appConfig";
 import { formatTemperature } from "./appHelpers";
+import { buildStageBlendBreakdown } from "./blendBreakdown";
 import { copy, type CopyText } from "./copy";
 import { getBakeDurationUnit } from "./locale";
 import { getPrefermentDisplayName, getPrefermentLeaveningName } from "./preferment";
@@ -36,22 +37,48 @@ export function getWaterSummaryText(result: DoughResult, locale: LocaleCode, uni
 function getFlourBlendInstruction(
   input: CalculatorInput,
   locale: LocaleCode,
-  blend: CalculatorInput["prefermentFlourBlend"]
+  blend: CalculatorInput["prefermentFlourBlend"],
+  flourGrams: number
 ): string {
-  if (!input.flourBlendEnabled || blend.length === 0) return "";
+  if (!input.flourBlendEnabled || blend.length === 0 || flourGrams <= 0) return "";
 
-  const description = describeBlend(blend, input.customFlours ?? []);
-  if (!description) return "";
+  const rows = buildStageBlendBreakdown(blend, flourGrams, input.customFlours ?? []).filter((row) => row.grams > 0);
+  if (rows.length === 0) return "";
+  const description = joinLocalizedList(
+    rows.map((row) => `${row.grams}g ${row.flourLabel} (${row.percentage}%)`),
+    locale
+  );
 
   if (locale === "de") {
-    return `Mehlauswahl: ${description}.`;
+    return `Dafür ${description} zugeben.`;
   }
 
   if (locale === "it") {
-    return `Miscela di farine: ${description}.`;
+    return `Per questa parte aggiungi ${description}.`;
   }
 
-  return `Flour blend: ${description}.`;
+  return `Add ${description}.`;
+}
+
+function joinLocalizedList(items: string[], locale: LocaleCode): string {
+  if (items.length === 0) return "";
+  if (items.length === 1) return items[0];
+  if (items.length === 2) {
+    return locale === "de"
+      ? `${items[0]} und ${items[1]}`
+      : locale === "it"
+        ? `${items[0]} e ${items[1]}`
+        : `${items[0]} and ${items[1]}`;
+  }
+
+  const head = items.slice(0, -1).join(", ");
+  const tail = items.at(-1);
+
+  return locale === "de"
+    ? `${head} und ${tail}`
+    : locale === "it"
+      ? `${head} e ${tail}`
+      : `${head}, and ${tail}`;
 }
 
 export function getEnrichmentHint(
@@ -370,8 +397,18 @@ export function getMethodSteps(
   const loafWorkflow = isLoafStyleId(input.styleId);
   const tinLoaf = isTinLoafStyleId(input.styleId);
   const yeastLabel = getCommercialYeastLabel(input, locale);
-  const prefermentFlourInstruction = getFlourBlendInstruction(input, locale, input.prefermentFlourBlend);
-  const mainDoughFlourInstruction = getFlourBlendInstruction(input, locale, input.mainDoughFlourBlend);
+  const prefermentFlourInstruction = getFlourBlendInstruction(
+    input,
+    locale,
+    input.prefermentFlourBlend,
+    ingredients.prefermentFlour ?? 0
+  );
+  const mainDoughFlourInstruction = getFlourBlendInstruction(
+    input,
+    locale,
+    input.mainDoughFlourBlend,
+    input.preferment.kind === "none" ? ingredients.totalFlour : (ingredients.mainFlour ?? 0)
+  );
 
   if (input.preferment.kind !== "none") {
     steps.push(

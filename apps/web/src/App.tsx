@@ -110,10 +110,22 @@ import {
   filterFlours,
   getSelectableFlours,
   getVisibleFlours,
+  remapInputFloursToRegion,
   type FlourRegionFilter
 } from "./flourCatalog";
 
 type BlendTarget = "prefermentFlourBlend" | "mainDoughFlourBlend";
+
+function blendsMatch(left: FlourBlendItem[], right: FlourBlendItem[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every(
+      (item, index) =>
+        item.flourId === right[index]?.flourId &&
+        item.percentage === right[index]?.percentage
+    )
+  );
+}
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -725,6 +737,21 @@ export function App() {
     }));
   }, [isBreadMode]);
 
+  useEffect(() => {
+    if (flourRegionFilter === "all") return;
+
+    setInput((current) => {
+      const normalized = normalizeCalculatorInput(current);
+      const remapped = remapInputFloursToRegion(normalized, flourRegionFilter);
+      const hasSameBlends =
+        blendsMatch(normalized.flourBlend, remapped.flourBlend) &&
+        blendsMatch(normalized.prefermentFlourBlend, remapped.prefermentFlourBlend) &&
+        blendsMatch(normalized.mainDoughFlourBlend, remapped.mainDoughFlourBlend);
+
+      return hasSameBlends ? current : remapped;
+    });
+  }, [flourRegionFilter, setInput]);
+
   const setPartial = (patch: Partial<CalculatorInput>) => {
     setInput((current) => ({ ...normalizeCalculatorInput(current), ...patch }));
   };
@@ -815,7 +842,7 @@ export function App() {
   };
 
   const applyCalculatorInput = (nextInput: CalculatorInput, nextRecipeName?: string) => {
-    const normalized = normalizeCalculatorInput(nextInput);
+    const normalized = normalizeCalculatorInput(remapInputFloursToRegion(nextInput, flourRegionFilter));
     const converted =
       normalized.pan.unit === settings.sizeUnit
         ? normalized
@@ -2385,7 +2412,7 @@ export function App() {
                         title: t.flourBlend,
                         lines: blendBreakdown.map(
                           (item) =>
-                            `${item.flourLabel}: ${item.totalGrams}g ${t.totalLabel}${
+                            `${item.flourLabel}: ${item.totalGrams}g ${t.totalLabel} (${item.percentage}%)${
                               prefermentMode !== "none"
                                 ? `, ${item.prefermentGrams}g ${prefermentName}, ${item.mainDoughGrams}g ${t.mainDoughAdditions.toLowerCase()}`
                                 : ""
