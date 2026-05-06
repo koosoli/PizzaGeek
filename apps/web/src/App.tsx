@@ -31,7 +31,6 @@ import {
   defaultCostSettings,
   estimatePanBallWeight,
   FERMENTATION_PRESETS,
-  FLOURS,
   normalizeBlend,
   PIZZA_STYLES,
   SAUCE_SALT_WARNING,
@@ -45,6 +44,7 @@ import {
   type CostSettings,
   type DoughResult,
   type FermentationPresetKey,
+  type Flour,
   type FlourBlendItem,
   type OvenType,
   type PizzaStyle,
@@ -89,7 +89,7 @@ import {
 import { getDefaultRecipeName, isAutoRecipeName, getRecipeDisplayName, getPortableDataImportMessage, getYeastOptionLabel, getYeastOptions, ovenOptions, presetKeys, getBatchLabels, getBatchDescriptor, numberValue, celsiusToFahrenheit, toLocalDateTimeInputValue, displayTemperatureValue, parseTemperatureInput, formatTemperature, formatMoney, addHours, roundDateUp, getPresetDurationHours, clampTo, createMobileSlider, createStyleSlider, createTemperatureSlider, getCountSlider, getWeightSlider, getSizePresetForStyle, roundTo, formatSizePresetLabel, formatArea, getLengthSuffix, styleRange } from "./appHelpers";
 import { formatDateTime, getBakeDurationUnit, getIntlLocale, getLanguageLabel, getPerPizzaLabel } from "./locale";
 import { copy, type CopyText } from "./copy";
-import { type BlendBreakdownRow, type StageBlendBreakdownRow, rebalanceBlendPercentages, buildStageBlendBreakdown, mergeBlendBreakdowns, getFlourLabel } from "./blendBreakdown";
+import { type BlendBreakdownRow, type StageBlendBreakdownRow, rebalanceBlendPercentages, buildStageBlendBreakdown, mergeBlendBreakdowns } from "./blendBreakdown";
 import { type PlannerTimelineStatus, type PlannerStepProgressState, type PlannerStepProgress, plannerShortcutPresets, breadPlannerShortcutPresets, formatPlannerTarget, formatPlannerDuration, getPlannerKindLabel, getPlannerPanelLabels, getPlannerStatusLabel, formatPlannerEndLabel, formatPlannerRange, getPlannerProgressLabel, getPlannerShortcutLabel, getPresetLabel } from "./planner";
 import { type PrefermentMode, type NaturalStarterChoice, getPrefermentModeFromStage, getDefaultStarterInoculationPercent, isNaturalStarterPreferment, getPrefermentLeaveningName, getNaturalStarterUiHint, getNaturalStarterChoice, getPrefermentPatch, getPrefermentDisplayName } from "./preferment";
 import { convertPanToUnit } from "./pan";
@@ -97,6 +97,7 @@ import { getSauceStyleLabel, getSauceUiCopy, localizeSauceOption, localizeSauceS
 import { buildQualitySignals, getHydrationWorkabilityNotice, type QualitySignal } from "./quality";
 import { applySinglePrefermentPatch, inferSauceStyleFromOption, normalizeCalculatorInput } from "./calculatorInput";
 import { formatBakeWindow, getEnrichmentHint, getMethodSteps, getOvenDetailText, getWaterSummaryText, localizePlanStep, localizeWaterMessage } from "./recipeText";
+import { createDefaultCustomFlour, CUSTOM_FLOUR_ID, filterFlours, getSelectableFlours } from "./flourCatalog";
 
 type BlendTarget = "prefermentFlourBlend" | "mainDoughFlourBlend";
 
@@ -257,6 +258,7 @@ export function App() {
   const [offlineReady, setOfflineReady] = useState(false);
   const [plannerNotes, setPlannerNotes] = useState<Record<string, string>>({});
   const [plannerStepProgress, setPlannerStepProgress] = useState<Record<string, PlannerStepProgress>>({});
+  const [flourFilter, setFlourFilter] = useState("");
   const [recipeName, setRecipeName] = useState(() =>
     getDefaultRecipeName(
       persistedStyleId,
@@ -324,6 +326,9 @@ export function App() {
     [selectedSauceOption, settings.language]
   );
   const localizedYeastOptions = useMemo(() => getYeastOptions(settings.language), [settings.language]);
+  const availableFlours = useMemo(() => getSelectableFlours(normalizedInput.customFlours ?? []), [normalizedInput.customFlours]);
+  const filteredFlourOptions = useMemo(() => filterFlours(availableFlours, flourFilter), [availableFlours, flourFilter]);
+  const customFlour = normalizedInput.customFlours?.[0];
   const prefermentMode = getPrefermentModeFromStage(normalizedInput.preferment);
   const naturalStarterSelected = isNaturalStarterPreferment(normalizedInput.preferment);
   const naturalStarterChoice = getNaturalStarterChoice(normalizedInput.preferment);
@@ -572,14 +577,21 @@ export function App() {
   );
   const prefermentBlendBreakdown = useMemo<StageBlendBreakdownRow[]>(() => {
     if (!normalizedInput.flourBlendEnabled || prefermentMode === "none") return [];
-    return buildStageBlendBreakdown(normalizedInput.prefermentFlourBlend, prefermentFlourGrams);
-  }, [normalizedInput.flourBlendEnabled, normalizedInput.prefermentFlourBlend, prefermentFlourGrams, prefermentMode]);
+    return buildStageBlendBreakdown(normalizedInput.prefermentFlourBlend, prefermentFlourGrams, normalizedInput.customFlours);
+  }, [
+    normalizedInput.customFlours,
+    normalizedInput.flourBlendEnabled,
+    normalizedInput.prefermentFlourBlend,
+    prefermentFlourGrams,
+    prefermentMode
+  ]);
   const mainDoughBlendBreakdown = useMemo<StageBlendBreakdownRow[]>(() => {
     if (!normalizedInput.flourBlendEnabled) return [];
     const targetFlourGrams = prefermentMode === "none" ? result.ingredients.totalFlour : mainDoughFlourGrams;
-    return buildStageBlendBreakdown(normalizedInput.mainDoughFlourBlend, targetFlourGrams);
+    return buildStageBlendBreakdown(normalizedInput.mainDoughFlourBlend, targetFlourGrams, normalizedInput.customFlours);
   }, [
     mainDoughFlourGrams,
+    normalizedInput.customFlours,
     normalizedInput.flourBlendEnabled,
     normalizedInput.mainDoughFlourBlend,
     prefermentMode,
@@ -588,9 +600,15 @@ export function App() {
   const blendBreakdown = useMemo<BlendBreakdownRow[]>(() => {
     if (!normalizedInput.flourBlendEnabled) return [];
 
-    return mergeBlendBreakdowns(normalizedInput.flourBlend, prefermentBlendBreakdown, mainDoughBlendBreakdown);
+    return mergeBlendBreakdowns(
+      normalizedInput.flourBlend,
+      prefermentBlendBreakdown,
+      mainDoughBlendBreakdown,
+      normalizedInput.customFlours
+    );
   }, [
     mainDoughBlendBreakdown,
+    normalizedInput.customFlours,
     normalizedInput.flourBlend,
     normalizedInput.flourBlendEnabled,
     prefermentBlendBreakdown
@@ -936,6 +954,56 @@ export function App() {
           patch.percentage === undefined
             ? updatedBlend
             : rebalanceBlendPercentages(updatedBlend, index, patch.percentage)
+      };
+    });
+  };
+
+  const getVisibleFlours = (selectedFlourId: string) => {
+    if (flourFilter.trim() === "") return availableFlours;
+
+    if (filteredFlourOptions.some((flour) => flour.id === selectedFlourId)) {
+      return filteredFlourOptions;
+    }
+
+    const selectedFlour = availableFlours.find((flour) => flour.id === selectedFlourId);
+    return selectedFlour ? [selectedFlour, ...filteredFlourOptions] : filteredFlourOptions;
+  };
+
+  const setCustomFlour = (patch: Partial<Flour>) => {
+    setInput((current) => {
+      const normalized = normalizeCalculatorInput(current);
+      const nextCustomFlour = {
+        ...(normalized.customFlours?.[0] ?? createDefaultCustomFlour()),
+        ...patch,
+        id: CUSTOM_FLOUR_ID,
+        regions: ["GLOBAL"]
+      };
+
+      return {
+        ...normalized,
+        customFlours: [nextCustomFlour]
+      };
+    });
+  };
+
+  const addCustomFlour = () => {
+    setInput((current) => {
+      const normalized = normalizeCalculatorInput(current);
+      if (normalized.customFlours?.length) return normalized;
+
+      return {
+        ...normalized,
+        customFlours: [createDefaultCustomFlour()]
+      };
+    });
+  };
+
+  const removeCustomFlour = () => {
+    setInput((current) => {
+      const normalized = normalizeCalculatorInput(current);
+      return {
+        ...normalized,
+        customFlours: []
       };
     });
   };
@@ -1607,6 +1675,93 @@ export function App() {
 
                   {normalizedInput.flourBlendEnabled ? (
                     <div className="blendList">
+                      <label className="field single">
+                        <span>{t.filterFlours}</span>
+                        <input
+                          type="search"
+                          value={flourFilter}
+                          placeholder={t.filterFloursPlaceholder}
+                          onChange={(event) => setFlourFilter(event.target.value)}
+                        />
+                      </label>
+                      {flourFilter.trim() !== "" && filteredFlourOptions.length === 0 ? (
+                        <p className="sectionMeta fieldMeta">{t.flourFilterEmpty}</p>
+                      ) : null}
+                      <div className="customFlourCard">
+                        <div className="panelMetaRow">
+                          <strong>{t.customFlour}</strong>
+                          {customFlour ? (
+                            <button className="ghostButton" type="button" onClick={removeCustomFlour}>
+                              {t.removeCustomFlour}
+                            </button>
+                          ) : (
+                            <button className="ghostButton" type="button" onClick={addCustomFlour}>
+                              {t.addCustomFlour}
+                            </button>
+                          )}
+                        </div>
+                        <p className="sectionMeta fieldMeta">{t.customFlourHint}</p>
+                        {customFlour ? (
+                          <div className="customFlourGrid">
+                            <label className="field single">
+                              <span>{t.customFlourBrand}</span>
+                              <input
+                                type="text"
+                                value={customFlour.brand}
+                                onChange={(event) => setCustomFlour({ brand: event.target.value })}
+                              />
+                            </label>
+                            <label className="field single">
+                              <span>{t.customFlourName}</span>
+                              <input
+                                type="text"
+                                value={customFlour.name}
+                                onChange={(event) => setCustomFlour({ name: event.target.value })}
+                              />
+                            </label>
+                            <label className="field">
+                              <span>{t.customFlourType}</span>
+                              <select
+                                value={customFlour.type}
+                                onChange={(event) => setCustomFlour({ type: event.target.value as Flour["type"] })}
+                              >
+                                <option value="tipo00">Tipo 00</option>
+                                <option value="tipo0">Tipo 0</option>
+                                <option value="bread">Bread</option>
+                                <option value="high-gluten">High gluten</option>
+                                <option value="all-purpose">All-purpose</option>
+                                <option value="manitoba">Manitoba</option>
+                                <option value="whole-grain">Whole grain</option>
+                              </select>
+                            </label>
+                            <Field
+                              label={t.customFlourProtein}
+                              value={customFlour.proteinPercent}
+                              suffix="%"
+                              step={0.1}
+                              min={0}
+                              onChange={(value) => setCustomFlour({ proteinPercent: numberValue(value, 12) })}
+                            />
+                            <label className="field single">
+                              <span>{t.customFlourWStrength}</span>
+                              <input
+                                type="text"
+                                value={customFlour.wStrength ?? ""}
+                                placeholder="W300"
+                                onChange={(event) => setCustomFlour({ wStrength: event.target.value || undefined })}
+                              />
+                            </label>
+                            <Field
+                              label={t.customFlourAbsorption}
+                              value={customFlour.absorptionAdjustment}
+                              step={0.1}
+                              min={-10}
+                              max={10}
+                              onChange={(value) => setCustomFlour({ absorptionAdjustment: numberValue(value) })}
+                            />
+                          </div>
+                        ) : null}
+                      </div>
                       {prefermentMode !== "none" ? (
                         <>
                           <div className="panelMetaRow">
@@ -1628,7 +1783,7 @@ export function App() {
                                   value={item.flourId}
                                   onChange={(event) => setBlendItem("prefermentFlourBlend", index, { flourId: event.target.value })}
                                 >
-                                  {FLOURS.map((flour) => (
+                                  {getVisibleFlours(item.flourId).map((flour) => (
                                     <option key={flour.id} value={flour.id}>
                                       {flour.brand} {flour.name}
                                     </option>
@@ -1682,7 +1837,7 @@ export function App() {
                               value={item.flourId}
                               onChange={(event) => setBlendItem("mainDoughFlourBlend", index, { flourId: event.target.value })}
                             >
-                              {FLOURS.map((flour) => (
+                              {getVisibleFlours(item.flourId).map((flour) => (
                                 <option key={flour.id} value={flour.id}>
                                   {flour.brand} {flour.name}
                                 </option>
@@ -2556,5 +2711,3 @@ function SignalRow({ signal }: { signal: QualitySignal }) {
     </div>
   );
 }
-
-

@@ -247,6 +247,29 @@ describe("calculateDough", () => {
     expect(result.flourBlend.description).toContain("All Trumps");
   });
 
+  it("uses custom flour definitions in blend calculations", () => {
+    const input = createDefaultInput(STYLE_IDS.NEW_YORK);
+    input.customFlours = [{
+      id: "custom-flour",
+      brand: "Custom",
+      name: "Strong White",
+      type: "bread",
+      proteinPercent: 14,
+      wStrength: "W350",
+      absorptionAdjustment: 4,
+      regions: ["GLOBAL"]
+    }];
+    input.flourBlend = [{ flourId: "custom-flour", percentage: 100 }];
+    input.prefermentFlourBlend = [{ flourId: "custom-flour", percentage: 100 }];
+    input.mainDoughFlourBlend = [{ flourId: "custom-flour", percentage: 100 }];
+
+    const result = calculateDough(input);
+
+    expect(result.flourBlend.blendedW).toBe(350);
+    expect(result.flourBlend.absorptionAdjustment).toBe(4);
+    expect(result.flourBlend.description).toContain("Custom Strong White");
+  });
+
   it("supports combined preferment stages like poolish plus biga", () => {
     const input = createDefaultInput(STYLE_IDS.NEW_YORK);
     input.preferment.kind = "none";

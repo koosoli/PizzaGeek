@@ -258,6 +258,7 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
     preferment: defaultPreferment(),
     preferments: [],
     flourBlendEnabled: true,
+    customFlours: [],
     flourBlend: defaultBlend,
     prefermentFlourBlend: defaultBlend,
     mainDoughFlourBlend: defaultBlend,

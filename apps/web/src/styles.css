@@ -923,6 +923,21 @@ textarea {
   margin-top: 12px;
 }
 
+.customFlourCard {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.customFlourGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .blendRow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 92px 42px;
@@ -1738,6 +1753,7 @@ textarea {
   .summaryGrid,
   .plannerSummaryGrid,
   .plannerProcessGrid,
+  .customFlourGrid,
   .blendRow,
   .sauceDetailGrid,
   .printColumns,
