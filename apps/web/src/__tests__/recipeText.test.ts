@@ -27,9 +27,9 @@ describe("getMethodSteps", () => {
     const result = calculateDough(input);
     const steps = getMethodSteps(input, result, "en", "F");
 
-    expect(steps[0]).toContain("Flour blend: 70% Caputo Nuvola + 30% Generic Whole Wheat.");
-    expect(steps.find((step) => step.startsWith("Mix the final dough"))).toContain(
-      "Flour blend: 80% King Arthur Bread Flour + 20% Gold Medal (General Mills) All Trumps."
+    expect(steps[0]).toMatch(/Add \d+g Caputo Nuvola \(70%\) and \d+g Generic Whole Wheat \(30%\)\./);
+    expect(steps.find((step) => step.startsWith("Mix the final dough"))).toMatch(
+      /Add \d+g King Arthur Bread Flour \(80%\) and \d+g Gold Medal \(General Mills\) All Trumps \(20%\)\./
     );
   });
 
@@ -42,8 +42,8 @@ describe("getMethodSteps", () => {
     const result = calculateDough(input);
     const steps = getMethodSteps(input, result, "en", "F");
 
-    expect(steps.find((step) => step.startsWith("Mix the final dough"))).toContain(
-      "Flour blend: 100% Gold Medal (General Mills) All Trumps."
+    expect(steps.find((step) => step.startsWith("Mix the final dough"))).toMatch(
+      /Add \d+g Gold Medal \(General Mills\) All Trumps \(100%\)\./
     );
   });
 });

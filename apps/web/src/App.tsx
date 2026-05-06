@@ -110,6 +110,7 @@ import {
   filterFlours,
   getSelectableFlours,
   getVisibleFlours,
+  remapInputFloursToRegion,
   type FlourRegionFilter
 } from "./flourCatalog";
 
@@ -725,6 +726,27 @@ export function App() {
     }));
   }, [isBreadMode]);
 
+  useEffect(() => {
+    if (flourRegionFilter === "all") return;
+
+    setInput((current) => {
+      const normalized = normalizeCalculatorInput(current);
+      const remapped = remapInputFloursToRegion(normalized, flourRegionFilter);
+      const before = JSON.stringify([
+        normalized.flourBlend,
+        normalized.prefermentFlourBlend,
+        normalized.mainDoughFlourBlend
+      ]);
+      const after = JSON.stringify([
+        remapped.flourBlend,
+        remapped.prefermentFlourBlend,
+        remapped.mainDoughFlourBlend
+      ]);
+
+      return before === after ? current : remapped;
+    });
+  }, [flourRegionFilter, setInput]);
+
   const setPartial = (patch: Partial<CalculatorInput>) => {
     setInput((current) => ({ ...normalizeCalculatorInput(current), ...patch }));
   };
@@ -815,7 +837,7 @@ export function App() {
   };
 
   const applyCalculatorInput = (nextInput: CalculatorInput, nextRecipeName?: string) => {
-    const normalized = normalizeCalculatorInput(nextInput);
+    const normalized = normalizeCalculatorInput(remapInputFloursToRegion(nextInput, flourRegionFilter));
     const converted =
       normalized.pan.unit === settings.sizeUnit
         ? normalized
@@ -2385,7 +2407,7 @@ export function App() {
                         title: t.flourBlend,
                         lines: blendBreakdown.map(
                           (item) =>
-                            `${item.flourLabel}: ${item.totalGrams}g ${t.totalLabel}${
+                            `${item.flourLabel}: ${item.totalGrams}g ${t.totalLabel} (${item.percentage}%)${
                               prefermentMode !== "none"
                                 ? `, ${item.prefermentGrams}g ${prefermentName}, ${item.mainDoughGrams}g ${t.mainDoughAdditions.toLowerCase()}`
                                 : ""

@@ -1,10 +1,13 @@
+import { createDefaultInput, STYLE_IDS } from "@pizza-geek/core";
 import { describe, expect, it } from "vitest";
 import {
   createDefaultCustomFlour,
   filterFlours,
   getSelectableFlours,
   getVisibleFlours,
-  normalizeCustomFlours
+  normalizeCustomFlours,
+  remapBlendToRegion,
+  remapInputFloursToRegion
 } from "../flourCatalog";
 
 describe("flourCatalog", () => {
@@ -70,5 +73,26 @@ describe("flourCatalog", () => {
     ]);
 
     expect(normalized).toEqual([createDefaultCustomFlour()]);
+  });
+
+  it("remaps out-of-region preset flours to curated EU equivalents", () => {
+    expect(remapBlendToRegion([
+      { flourId: "king-arthur-bread", percentage: 80 },
+      { flourId: "all-trumps", percentage: 20 }
+    ], "EU")).toEqual([
+      { flourId: "diamant-550", percentage: 80 },
+      { flourId: "caputo-americana", percentage: 20 }
+    ]);
+  });
+
+  it("remaps default recipe blends when a regional flour preference is active", () => {
+    const input = createDefaultInput(STYLE_IDS.COUNTRY_LOAF);
+    const remapped = remapInputFloursToRegion(input, "EU");
+
+    expect(remapped.flourBlend).toEqual([
+      { flourId: "diamant-550", percentage: 90 },
+      { flourId: "whole-wheat", percentage: 10 }
+    ]);
+    expect(remapped.mainDoughFlourBlend).toEqual(remapped.flourBlend);
   });
 });
