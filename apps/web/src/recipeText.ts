@@ -60,6 +60,22 @@ function getFlourBlendInstruction(
   return `Add ${description}.`;
 }
 
+function getGermanFlourLead(
+  input: CalculatorInput,
+  blend: CalculatorInput["prefermentFlourBlend"],
+  flourGrams: number,
+  totalFlourPercent: number
+): string {
+  if (!input.flourBlendEnabled || blend.length === 0 || flourGrams <= 0) {
+    return `${flourGrams}g Mehl (${totalFlourPercent}% vom Gesamtmehl)`;
+  }
+
+  const rows = buildStageBlendBreakdown(blend, flourGrams, input.customFlours ?? []).filter((row) => row.grams > 0);
+  if (rows.length !== 1) return `${flourGrams}g Mehl (${totalFlourPercent}% vom Gesamtmehl)`;
+
+  return `${rows[0].grams}g ${rows[0].flourLabel} (${totalFlourPercent}% vom Gesamtmehl)`;
+}
+
 function joinLocalizedList(items: string[], locale: LocaleCode): string {
   if (items.length === 0) return "";
   if (items.length === 1) return items[0];
@@ -411,9 +427,15 @@ export function getMethodSteps(
   );
 
   if (input.preferment.kind !== "none") {
+    const germanPrefermentFlourLead = getGermanFlourLead(
+      input,
+      input.prefermentFlourBlend,
+      ingredients.prefermentFlour ?? 0,
+      input.preferment.flourPercent
+    );
     steps.push(
       locale === "de"
-        ? `${prefermentName} mischen: ${ingredients.prefermentFlour}g Mehl (${input.preferment.flourPercent}% vom Gesamtmehl), ${ingredients.prefermentWater}g Wasser und ${ingredients.prefermentYeast}g ${prefermentLeaveningName} kombinieren.${prefermentFlourInstruction ? ` ${prefermentFlourInstruction}` : ""} ${input.preferment.roomHours}h bei Raumtemperatur reifen lassen${input.preferment.coldHours > 0 ? `, danach ${input.preferment.coldHours}h kalt führen` : ""}.`
+        ? `${prefermentName} mischen: ${germanPrefermentFlourLead}, ${ingredients.prefermentWater}g Wasser und ${ingredients.prefermentYeast}g ${prefermentLeaveningName} kombinieren.${prefermentFlourInstruction ? ` ${prefermentFlourInstruction}` : ""} ${input.preferment.roomHours}h bei Raumtemperatur reifen lassen${input.preferment.coldHours > 0 ? `, danach ${input.preferment.coldHours}h kalt führen` : ""}.`
         : locale === "it"
           ? `Prepara ${prefermentName}: unisci ${ingredients.prefermentFlour}g di farina (${input.preferment.flourPercent}% della farina totale), ${ingredients.prefermentWater}g di acqua e ${ingredients.prefermentYeast}g di ${prefermentLeaveningName}.${prefermentFlourInstruction ? ` ${prefermentFlourInstruction}` : ""} Lascia fermentare per ${input.preferment.roomHours}h a temperatura ambiente${input.preferment.coldHours > 0 ? `, poi ${input.preferment.coldHours}h al freddo` : ""}.`
           : `Mix ${prefermentName}: combine ${ingredients.prefermentFlour}g flour (${input.preferment.flourPercent}% of total flour), ${ingredients.prefermentWater}g water, and ${ingredients.prefermentYeast}g ${prefermentLeaveningName}.${prefermentFlourInstruction ? ` ${prefermentFlourInstruction}` : ""} Ferment ${input.preferment.roomHours}h at room temperature${input.preferment.coldHours > 0 ? `, then ${input.preferment.coldHours}h cold` : ""}.`

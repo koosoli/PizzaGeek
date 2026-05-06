@@ -46,4 +46,25 @@ describe("getMethodSteps", () => {
       /Add \d+g Gold Medal \(General Mills\) All Trumps \(100%\)\./
     );
   });
+
+  it("names the selected preferment flour directly in the German poolish step", () => {
+    const candidate = createDefaultInput(STYLE_IDS.NEW_YORK);
+    candidate.preferment = {
+      ...candidate.preferment,
+      kind: "poolish",
+      flourPercent: 30,
+      bigaHydration: 100,
+      roomHours: 12
+    };
+    candidate.preferments = [candidate.preferment];
+    candidate.prefermentFlourBlend = [{ flourId: "diamant-550", percentage: 100 }];
+
+    const input = normalizeCalculatorInput(candidate);
+    const result = calculateDough(input);
+    const steps = getMethodSteps(input, result, "de", "C");
+
+    expect(steps[0]).toMatch(
+      /Poolish mischen: \d+g Diamant Type 550 Weizenmehl \(30% vom Gesamtmehl\), \d+g Wasser und [\d.]+g Hefe kombinieren\./
+    );
+  });
 });
