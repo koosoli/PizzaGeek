@@ -61,7 +61,8 @@ function getFlourBlendInstruction(
 }
 
 function joinLocalizedList(items: string[], locale: LocaleCode): string {
-  if (items.length <= 1) return items[0] ?? "";
+  if (items.length === 0) return "";
+  if (items.length === 1) return items[0];
   if (items.length === 2) {
     return locale === "de"
       ? `${items[0]} und ${items[1]}`

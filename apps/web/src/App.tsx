@@ -116,6 +116,17 @@ import {
 
 type BlendTarget = "prefermentFlourBlend" | "mainDoughFlourBlend";
 
+function blendsMatch(left: FlourBlendItem[], right: FlourBlendItem[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every(
+      (item, index) =>
+        item.flourId === right[index]?.flourId &&
+        item.percentage === right[index]?.percentage
+    )
+  );
+}
+
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
@@ -732,18 +743,12 @@ export function App() {
     setInput((current) => {
       const normalized = normalizeCalculatorInput(current);
       const remapped = remapInputFloursToRegion(normalized, flourRegionFilter);
-      const before = JSON.stringify([
-        normalized.flourBlend,
-        normalized.prefermentFlourBlend,
-        normalized.mainDoughFlourBlend
-      ]);
-      const after = JSON.stringify([
-        remapped.flourBlend,
-        remapped.prefermentFlourBlend,
-        remapped.mainDoughFlourBlend
-      ]);
+      const hasSameBlends =
+        blendsMatch(normalized.flourBlend, remapped.flourBlend) &&
+        blendsMatch(normalized.prefermentFlourBlend, remapped.prefermentFlourBlend) &&
+        blendsMatch(normalized.mainDoughFlourBlend, remapped.mainDoughFlourBlend);
 
-      return before === after ? current : remapped;
+      return hasSameBlends ? current : remapped;
     });
   }, [flourRegionFilter, setInput]);
 
