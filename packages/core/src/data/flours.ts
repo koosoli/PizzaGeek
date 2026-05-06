@@ -62,6 +62,7 @@ export const FLOURS: Flour[] = [
   flour("rosselmuhle-tipo-00", "Rosselmuhle", "Pizzamehl Tipo 00", "tipo00", 11.5, "W240", -1, ["GLOBAL", "EU"]),
   flour("aldi-goldahren", "Aldi (Goldahren)", "Pizzamehl", "tipo00", 11, undefined, -2, ["GLOBAL", "EU"]),
   flour("lidl-belbake", "Lidl (Belbake)", "Pizzamehl Tipo 00", "tipo00", 11.5, undefined, -2, ["GLOBAL", "EU"]),
+  flour("le-moulin-1704-pizza", "Le Moulin 1704", "Pizza 1 kg", "tipo00", 11.5, undefined, -2, ["GLOBAL", "EU"]),
 
   flour("ooni-tipo-00", "Ooni", "Type 00 Pizza Flour", "tipo00", 11.8, "W320", 2, ["GLOBAL", "EU", "US"]),
   flour("king-arthur-bread", "King Arthur", "Bread Flour", "bread", 12.7, "W290", 2, ["GLOBAL", "US"]),
