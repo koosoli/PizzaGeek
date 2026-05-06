@@ -1,7 +1,7 @@
 import { calculateDough, createDefaultInput, STYLE_IDS } from "@pizza-geek/core";
 import { describe, expect, it } from "vitest";
 import { copy } from "../copy";
-import { getIngredientPercentageNotices } from "../quality";
+import { buildQualitySignals, getIngredientPercentageNotices } from "../quality";
 
 describe("getIngredientPercentageNotices", () => {
   it("flags extreme ingredient percentages as danger notices", () => {
@@ -32,6 +32,55 @@ describe("getIngredientPercentageNotices", () => {
         tone: "warning",
         message: expect.stringContaining("Salt is outside this style's")
       })
+    );
+  });
+});
+
+describe("buildQualitySignals", () => {
+  it("maxes out the salt quality bar in red when salt exceeds the style threshold", () => {
+    const input = createDefaultInput(STYLE_IDS.NEW_YORK);
+    input.saltPercent = 5;
+
+    const signals = buildQualitySignals(calculateDough(input), input, "F", copy.en);
+
+    expect(signals).toContainEqual(
+      expect.objectContaining({
+        label: copy.en.saltBalance,
+        score: 100,
+        tone: "danger"
+      })
+    );
+  });
+
+  it("adds full-width red alerts for other ingredients that exceed their thresholds", () => {
+    const input = createDefaultInput(STYLE_IDS.NEW_YORK);
+    input.oilPercent = 10;
+    input.honeyPercent = 21;
+    input.maltPercent = 6;
+
+    const signals = buildQualitySignals(calculateDough(input), input, "F", copy.en);
+
+    expect(signals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: copy.en.oil,
+          value: "10%",
+          score: 100,
+          tone: "danger"
+        }),
+        expect.objectContaining({
+          label: copy.en.honey,
+          value: "21%",
+          score: 100,
+          tone: "danger"
+        }),
+        expect.objectContaining({
+          label: copy.en.malt,
+          value: "6%",
+          score: 100,
+          tone: "danger"
+        })
+      ])
     );
   });
 });
