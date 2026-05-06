@@ -97,7 +97,7 @@ import { getSauceStyleLabel, getSauceUiCopy, localizeSauceOption, localizeSauceS
 import { buildQualitySignals, getHydrationWorkabilityNotice, type QualitySignal } from "./quality";
 import { applySinglePrefermentPatch, inferSauceStyleFromOption, normalizeCalculatorInput } from "./calculatorInput";
 import { formatBakeWindow, getEnrichmentHint, getMethodSteps, getOvenDetailText, getWaterSummaryText, localizePlanStep, localizeWaterMessage } from "./recipeText";
-import { createDefaultCustomFlour, CUSTOM_FLOUR_ID, filterFlours, getSelectableFlours } from "./flourCatalog";
+import { createDefaultCustomFlour, CUSTOM_FLOUR_ID, filterFlours, getSelectableFlours, type FlourRegionFilter } from "./flourCatalog";
 
 type BlendTarget = "prefermentFlourBlend" | "mainDoughFlourBlend";
 
@@ -259,6 +259,7 @@ export function App() {
   const [plannerNotes, setPlannerNotes] = useState<Record<string, string>>({});
   const [plannerStepProgress, setPlannerStepProgress] = useState<Record<string, PlannerStepProgress>>({});
   const [flourFilter, setFlourFilter] = useState("");
+  const [flourRegionFilter, setFlourRegionFilter] = useState<FlourRegionFilter>("all");
   const [recipeName, setRecipeName] = useState(() =>
     getDefaultRecipeName(
       persistedStyleId,
@@ -327,7 +328,10 @@ export function App() {
   );
   const localizedYeastOptions = useMemo(() => getYeastOptions(settings.language), [settings.language]);
   const availableFlours = useMemo(() => getSelectableFlours(normalizedInput.customFlours ?? []), [normalizedInput.customFlours]);
-  const filteredFlourOptions = useMemo(() => filterFlours(availableFlours, flourFilter), [availableFlours, flourFilter]);
+  const filteredFlourOptions = useMemo(
+    () => filterFlours(availableFlours, flourFilter, flourRegionFilter),
+    [availableFlours, flourFilter, flourRegionFilter]
+  );
   const customFlour = normalizedInput.customFlours?.[0];
   const prefermentMode = getPrefermentModeFromStage(normalizedInput.preferment);
   const naturalStarterSelected = isNaturalStarterPreferment(normalizedInput.preferment);
@@ -1684,7 +1688,19 @@ export function App() {
                           onChange={(event) => setFlourFilter(event.target.value)}
                         />
                       </label>
-                      {flourFilter.trim() !== "" && filteredFlourOptions.length === 0 ? (
+                      <div className="blendFilterToggles">
+                        <Toggle
+                          checked={flourRegionFilter === "US"}
+                          label={t.usFloursOnly}
+                          onChange={(checked) => setFlourRegionFilter(checked ? "US" : "all")}
+                        />
+                        <Toggle
+                          checked={flourRegionFilter === "EU"}
+                          label={t.euFloursOnly}
+                          onChange={(checked) => setFlourRegionFilter(checked ? "EU" : "all")}
+                        />
+                      </div>
+                      {(flourFilter.trim() !== "" || flourRegionFilter !== "all") && filteredFlourOptions.length === 0 ? (
                         <p className="sectionMeta fieldMeta">{t.flourFilterEmpty}</p>
                       ) : null}
                       <div className="customFlourCard">
