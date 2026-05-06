@@ -32,6 +32,11 @@ type QualityScore = Pick<QualitySignal, "score" | "tone">;
 
 const BASE_OUT_OF_RANGE_SCORE = 60;
 const MAX_IN_RANGE_DEDUCTION = 40;
+const HEALTHY_SIGNAL_SCORE = 94;
+const FLOUR_DANGER_SCORE = 24;
+const FLOUR_WARNING_SCORE = 55;
+const FLOUR_NOTICE_SCORE = 75;
+const WATER_WARNING_SCORE = 55;
 
 function createQualityScore(score: number): QualityScore {
   const normalizedScore = Math.round(clampTo(score, 0, 100));
@@ -93,13 +98,13 @@ export function buildQualitySignals(
   );
   const flourScore =
     result.flourBlend.warningColor === "danger"
-      ? 24
+      ? FLOUR_DANGER_SCORE
       : result.flourBlend.warningColor === "warning"
-        ? 55
+        ? FLOUR_WARNING_SCORE
         : result.flourBlend.warningColor === "notice"
-          ? 75
-          : 94;
-  const waterScore = result.waterTemperature.warning ? 55 : 94;
+          ? FLOUR_NOTICE_SCORE
+          : HEALTHY_SIGNAL_SCORE;
+  const waterScore = result.waterTemperature.warning ? WATER_WARNING_SCORE : HEALTHY_SIGNAL_SCORE;
 
   return [
     {
