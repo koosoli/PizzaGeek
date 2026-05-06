@@ -1,4 +1,4 @@
-import { getSauceOption, type BakeStep, type CalculatorInput, type DoughResult, type TemperatureUnit } from "@pizza-geek/core";
+import { describeBlend, getSauceOption, type BakeStep, type CalculatorInput, type DoughResult, type TemperatureUnit } from "@pizza-geek/core";
 import type { LocaleCode } from "./appConfig";
 import { formatTemperature } from "./appHelpers";
 import { copy, type CopyText } from "./copy";
@@ -31,6 +31,27 @@ export function getWaterSummaryText(result: DoughResult, locale: LocaleCode, uni
     useText: `Use water at ${formatTemperaturePair(water.waterTempF, unit)}.`,
     targetText: `Target dough temp: ${formatTemperaturePair(water.targetFdtF, unit)} for ${result.totalFermentationHours}h ferment.`
   };
+}
+
+function getFlourBlendInstruction(
+  input: CalculatorInput,
+  locale: LocaleCode,
+  blend: CalculatorInput["prefermentFlourBlend"]
+): string {
+  if (!input.flourBlendEnabled || blend.length === 0) return "";
+
+  const description = describeBlend(blend, input.customFlours ?? []);
+  if (!description) return "";
+
+  if (locale === "de") {
+    return ` Mehlauswahl: ${description}.`;
+  }
+
+  if (locale === "it") {
+    return ` Miscela di farine: ${description}.`;
+  }
+
+  return ` Flour blend: ${description}.`;
 }
 
 export function getEnrichmentHint(
@@ -353,10 +374,10 @@ export function getMethodSteps(
   if (input.preferment.kind !== "none") {
     steps.push(
       locale === "de"
-        ? `${prefermentName} mischen: ${ingredients.prefermentFlour}g Mehl (${input.preferment.flourPercent}% vom Gesamtmehl), ${ingredients.prefermentWater}g Wasser und ${ingredients.prefermentYeast}g ${prefermentLeaveningName} kombinieren. ${input.preferment.roomHours}h bei Raumtemperatur reifen lassen${input.preferment.coldHours > 0 ? `, danach ${input.preferment.coldHours}h kalt führen` : ""}.`
+        ? `${prefermentName} mischen: ${ingredients.prefermentFlour}g Mehl (${input.preferment.flourPercent}% vom Gesamtmehl), ${ingredients.prefermentWater}g Wasser und ${ingredients.prefermentYeast}g ${prefermentLeaveningName} kombinieren.${getFlourBlendInstruction(input, locale, input.prefermentFlourBlend)} ${input.preferment.roomHours}h bei Raumtemperatur reifen lassen${input.preferment.coldHours > 0 ? `, danach ${input.preferment.coldHours}h kalt führen` : ""}.`
         : locale === "it"
-          ? `Prepara ${prefermentName}: unisci ${ingredients.prefermentFlour}g di farina (${input.preferment.flourPercent}% della farina totale), ${ingredients.prefermentWater}g di acqua e ${ingredients.prefermentYeast}g di ${prefermentLeaveningName}. Lascia fermentare per ${input.preferment.roomHours}h a temperatura ambiente${input.preferment.coldHours > 0 ? `, poi ${input.preferment.coldHours}h al freddo` : ""}.`
-          : `Mix ${prefermentName}: combine ${ingredients.prefermentFlour}g flour (${input.preferment.flourPercent}% of total flour), ${ingredients.prefermentWater}g water, and ${ingredients.prefermentYeast}g ${prefermentLeaveningName}. Ferment ${input.preferment.roomHours}h at room temperature${input.preferment.coldHours > 0 ? `, then ${input.preferment.coldHours}h cold` : ""}.`
+          ? `Prepara ${prefermentName}: unisci ${ingredients.prefermentFlour}g di farina (${input.preferment.flourPercent}% della farina totale), ${ingredients.prefermentWater}g di acqua e ${ingredients.prefermentYeast}g di ${prefermentLeaveningName}.${getFlourBlendInstruction(input, locale, input.prefermentFlourBlend)} Lascia fermentare per ${input.preferment.roomHours}h a temperatura ambiente${input.preferment.coldHours > 0 ? `, poi ${input.preferment.coldHours}h al freddo` : ""}.`
+          : `Mix ${prefermentName}: combine ${ingredients.prefermentFlour}g flour (${input.preferment.flourPercent}% of total flour), ${ingredients.prefermentWater}g water, and ${ingredients.prefermentYeast}g ${prefermentLeaveningName}.${getFlourBlendInstruction(input, locale, input.prefermentFlourBlend)} Ferment ${input.preferment.roomHours}h at room temperature${input.preferment.coldHours > 0 ? `, then ${input.preferment.coldHours}h cold` : ""}.`
     );
   }
 
@@ -378,10 +399,10 @@ export function getMethodSteps(
 
   steps.push(
     locale === "de"
-      ? `Hauptteig mischen mit ${flour}g ${input.preferment.kind === "none" ? "Mehl" : "zusätzlichem Mehl"}, ${waterAmount}g ${input.preferment.kind === "none" ? "Wasser" : "zusätzlichem Wasser"}, ${ingredients.totalSalt}g Salz${!yeast ? "" : ` und ${yeast}g ${input.preferment.kind === "none" ? yeastLabel : `zusätzlicher ${yeastLabel}`}`}${input.preferment.kind !== "none" ? `${!yeast ? " sowie dem reifen " : " plus dem reifen "}${prefermentName}` : ""}.`
+      ? `Hauptteig mischen mit ${flour}g ${input.preferment.kind === "none" ? "Mehl" : "zusätzlichem Mehl"}, ${waterAmount}g ${input.preferment.kind === "none" ? "Wasser" : "zusätzlichem Wasser"}, ${ingredients.totalSalt}g Salz${!yeast ? "" : ` und ${yeast}g ${input.preferment.kind === "none" ? yeastLabel : `zusätzlicher ${yeastLabel}`}`}${input.preferment.kind !== "none" ? `${!yeast ? " sowie dem reifen " : " plus dem reifen "}${prefermentName}` : ""}.${getFlourBlendInstruction(input, locale, input.mainDoughFlourBlend)}`
       : locale === "it"
-        ? `Impasta il finale con ${flour}g di ${input.preferment.kind === "none" ? "farina" : "farina aggiuntiva"}, ${waterAmount}g di ${input.preferment.kind === "none" ? "acqua" : "acqua aggiuntiva"}, ${ingredients.totalSalt}g di sale${!yeast ? "" : ` e ${yeast}g di ${input.preferment.kind === "none" ? yeastLabel : `${yeastLabel} aggiuntivo`}`}${input.preferment.kind !== "none" ? `${!yeast ? ", più il " : ", poi aggiungi il "}${prefermentName} maturo` : ""}.`
-        : `Mix the final dough with ${flour}g ${input.preferment.kind === "none" ? "flour" : "fresh flour"}, ${waterAmount}g ${input.preferment.kind === "none" ? "water" : "fresh water"}, ${ingredients.totalSalt}g salt${!yeast ? "" : `, and ${yeast}g ${input.preferment.kind === "none" ? yeastLabel : `additional ${yeastLabel}`}`}${input.preferment.kind !== "none" ? `${!yeast ? ", plus the ripe " : " plus the ripe "}${prefermentName}` : ""}.`
+        ? `Impasta il finale con ${flour}g di ${input.preferment.kind === "none" ? "farina" : "farina aggiuntiva"}, ${waterAmount}g di ${input.preferment.kind === "none" ? "acqua" : "acqua aggiuntiva"}, ${ingredients.totalSalt}g di sale${!yeast ? "" : ` e ${yeast}g di ${input.preferment.kind === "none" ? yeastLabel : `${yeastLabel} aggiuntivo`}`}${input.preferment.kind !== "none" ? `${!yeast ? ", più il " : ", poi aggiungi il "}${prefermentName} maturo` : ""}.${getFlourBlendInstruction(input, locale, input.mainDoughFlourBlend)}`
+        : `Mix the final dough with ${flour}g ${input.preferment.kind === "none" ? "flour" : "fresh flour"}, ${waterAmount}g ${input.preferment.kind === "none" ? "water" : "fresh water"}, ${ingredients.totalSalt}g salt${!yeast ? "" : `, and ${yeast}g ${input.preferment.kind === "none" ? yeastLabel : `additional ${yeastLabel}`}`}${input.preferment.kind !== "none" ? `${!yeast ? ", plus the ripe " : " plus the ripe "}${prefermentName}` : ""}.${getFlourBlendInstruction(input, locale, input.mainDoughFlourBlend)}`
   );
 
   const enrichments = [
