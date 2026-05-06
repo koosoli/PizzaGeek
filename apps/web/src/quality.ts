@@ -1,4 +1,4 @@
-import type { CalculatorInput, DoughResult, TemperatureUnit } from "@pizza-geek/core";
+import type { CalculatorInput, DoughResult, RangePreset, TemperatureUnit } from "@pizza-geek/core";
 import type { LocaleCode } from "./appConfig";
 import { clampTo, formatTemperature } from "./appHelpers";
 import type { CopyText } from "./copy";
@@ -11,6 +11,22 @@ export type QualitySignal = {
   tone: "ok" | "notice" | "warning" | "danger";
   note: string;
 };
+
+export type DoughSetupNotice = {
+  tone: "ok" | "notice" | "warning" | "danger";
+  message: string;
+};
+
+export const DOUGH_PERCENT_LIMITS = {
+  hydrationPercent: 100,
+  saltPercent: 10,
+  oilPercent: 20,
+  sugarPercent: 20,
+  honeyPercent: 20,
+  maltPercent: 5,
+  lardPercent: 20,
+  milkPowderPercent: 10
+} as const;
 
 function scoreAgainstRange(value: number, min: number, recommended: number, max: number) {
   if (value < min || value > max) return 34;
@@ -111,7 +127,7 @@ export function getHydrationWorkabilityNotice(
   input: CalculatorInput,
   result: DoughResult,
   locale: LocaleCode
-): { tone: "notice" | "warning" | "danger"; message: string } | null {
+): DoughSetupNotice | null {
   const nearMax = input.hydrationPercent >= result.style.hydration.max - 0.5;
   const nearMin = input.hydrationPercent <= result.style.hydration.min + 0.5;
 
@@ -146,4 +162,71 @@ export function getHydrationWorkabilityNotice(
   }
 
   return null;
+}
+
+function formatNegativePercentNotice(label: string, locale: LocaleCode) {
+  if (locale === "de") return `${label} kann nicht negativ sein.`;
+  if (locale === "it") return `${label} non può essere negativo.`;
+  return `${label} cannot be negative.`;
+}
+
+function formatStyleRangeNotice(label: string, range: RangePreset, locale: LocaleCode) {
+  if (locale === "de") return `${label} liegt außerhalb des Stilbereichs von ${range.min}-${range.max}%.`;
+  if (locale === "it") return `${label} è fuori dall'intervallo dello stile di ${range.min}-${range.max}%.`;
+  return `${label} is outside this style's ${range.min}-${range.max}% range.`;
+}
+
+function formatExtremePercentNotice(label: string, value: number, max: number, locale: LocaleCode) {
+  if (locale === "de") {
+    return `${label} bei ${value}% liegt weit über einem brauchbaren Bereich. Prüfe die Prozentangabe (typisch höchstens etwa ${max}%).`;
+  }
+  if (locale === "it") {
+    return `${label} al ${value}% è ben oltre un intervallo utilizzabile. Controlla la percentuale inserita (di solito non oltre circa ${max}%).`;
+  }
+  return `${label} at ${value}% is far beyond a workable range. Double-check the percentage entry (usually no more than about ${max}%).`;
+}
+
+export function getIngredientPercentageNotices(
+  input: CalculatorInput,
+  result: DoughResult,
+  labels: Pick<CopyText, "salt" | "oil" | "sugar" | "honey" | "malt" | "lard" | "milkPowder">,
+  locale: LocaleCode
+): DoughSetupNotice[] {
+  const checks: Array<{
+    label: string;
+    value: number;
+    max: number;
+    range?: RangePreset;
+  }> = [
+    { label: labels.salt, value: input.saltPercent, max: DOUGH_PERCENT_LIMITS.saltPercent, range: result.style.salt },
+    { label: labels.oil, value: input.oilPercent, max: DOUGH_PERCENT_LIMITS.oilPercent, range: result.style.oil },
+    { label: labels.sugar, value: input.sugarPercent, max: DOUGH_PERCENT_LIMITS.sugarPercent, range: result.style.sugar },
+    { label: labels.honey, value: input.honeyPercent, max: DOUGH_PERCENT_LIMITS.honeyPercent },
+    { label: labels.malt, value: input.maltPercent, max: DOUGH_PERCENT_LIMITS.maltPercent },
+    { label: labels.lard, value: input.lardPercent, max: DOUGH_PERCENT_LIMITS.lardPercent },
+    { label: labels.milkPowder, value: input.milkPowderPercent, max: DOUGH_PERCENT_LIMITS.milkPowderPercent }
+  ];
+
+  return checks.flatMap((check) => {
+    if (check.value < 0) {
+      return [{ tone: "danger", message: formatNegativePercentNotice(check.label, locale) satisfies string }];
+    }
+
+    if (check.value > check.max) {
+      return [{
+        tone: "danger",
+        message: formatExtremePercentNotice(check.label, roundPercent(check.value), check.max, locale) satisfies string
+      }];
+    }
+
+    if (check.range && (check.value < check.range.min || check.value > check.range.max)) {
+      return [{ tone: "warning", message: formatStyleRangeNotice(check.label, check.range, locale) satisfies string }];
+    }
+
+    return [];
+  });
+}
+
+function roundPercent(value: number) {
+  return Math.round(value * 10) / 10;
 }

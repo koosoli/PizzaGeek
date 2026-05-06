@@ -94,7 +94,14 @@ import { type PlannerTimelineStatus, type PlannerStepProgressState, type Planner
 import { type PrefermentMode, type NaturalStarterChoice, getPrefermentModeFromStage, getDefaultStarterInoculationPercent, isNaturalStarterPreferment, getPrefermentLeaveningName, getNaturalStarterUiHint, getNaturalStarterChoice, getPrefermentPatch, getPrefermentDisplayName } from "./preferment";
 import { convertPanToUnit } from "./pan";
 import { getSauceStyleLabel, getSauceUiCopy, localizeSauceOption, localizeSauceSaltWarning } from "./sauceText";
-import { buildQualitySignals, getHydrationWorkabilityNotice, type QualitySignal } from "./quality";
+import {
+  buildQualitySignals,
+  DOUGH_PERCENT_LIMITS,
+  getHydrationWorkabilityNotice,
+  getIngredientPercentageNotices,
+  type DoughSetupNotice,
+  type QualitySignal
+} from "./quality";
 import { applySinglePrefermentPatch, inferSauceStyleFromOption, normalizeCalculatorInput } from "./calculatorInput";
 import { formatBakeWindow, getEnrichmentHint, getMethodSteps, getOvenDetailText, getWaterSummaryText, localizePlanStep, localizeWaterMessage } from "./recipeText";
 import {
@@ -527,12 +534,29 @@ export function App() {
   );
   const sizePreset = useMemo(() => getSizePresetForStyle(activeStyle.name), [activeStyle.name]);
   const doughSetupNotices = useMemo(() => {
-    const notices: Array<{ tone: "ok" | "notice" | "warning" | "danger"; message: string }> = [];
+    const notices: DoughSetupNotice[] = [];
     const hydrationNotice = getHydrationWorkabilityNotice(normalizedInput, result, settings.language);
 
     if (hydrationNotice) {
       notices.push(hydrationNotice);
     }
+
+    notices.push(
+      ...getIngredientPercentageNotices(
+        normalizedInput,
+        result,
+        {
+          salt: t.salt,
+          oil: t.oil,
+          sugar: t.sugar,
+          honey: t.honey,
+          malt: t.malt,
+          lard: t.lard,
+          milkPowder: t.milkPowder
+        },
+        settings.language
+      )
+    );
 
     if (normalizedInput.flourBlendEnabled && result.flourBlend.warning) {
       notices.push({
@@ -1402,6 +1426,8 @@ export function App() {
                     label={t.hydration}
                     value={normalizedInput.hydrationPercent}
                     suffix="%"
+                    min={0}
+                    max={DOUGH_PERCENT_LIMITS.hydrationPercent}
                     step={0.1}
                     slider={hydrationSlider}
                     onChange={(value) => setPartial({ hydrationPercent: numberValue(value) })}
@@ -1410,6 +1436,8 @@ export function App() {
                     label={t.salt}
                     value={normalizedInput.saltPercent}
                     suffix="%"
+                    min={0}
+                    max={DOUGH_PERCENT_LIMITS.saltPercent}
                     step={0.1}
                     slider={saltSlider}
                     onChange={(value) => setPartial({ saltPercent: numberValue(value) })}
@@ -1419,6 +1447,8 @@ export function App() {
                     value={normalizedInput.oilPercent}
                     suffix="%"
                     hint={getEnrichmentHint("oil", settings.language, result)}
+                    min={0}
+                    max={DOUGH_PERCENT_LIMITS.oilPercent}
                     step={0.1}
                     slider={oilSlider}
                     onChange={(value) => setPartial({ oilPercent: numberValue(value) })}
@@ -1428,6 +1458,8 @@ export function App() {
                     value={normalizedInput.sugarPercent}
                     suffix="%"
                     hint={getEnrichmentHint("sugar", settings.language, result)}
+                    min={0}
+                    max={DOUGH_PERCENT_LIMITS.sugarPercent}
                     step={0.1}
                     slider={sugarSlider}
                     onChange={(value) => setPartial({ sugarPercent: numberValue(value) })}
@@ -1439,6 +1471,8 @@ export function App() {
                         value={normalizedInput.honeyPercent}
                         suffix="%"
                         hint={getEnrichmentHint("honey", settings.language, result)}
+                        min={0}
+                        max={DOUGH_PERCENT_LIMITS.honeyPercent}
                         step={0.1}
                         onChange={(value) => setPartial({ honeyPercent: numberValue(value) })}
                       />
@@ -1447,6 +1481,8 @@ export function App() {
                         value={normalizedInput.maltPercent}
                         suffix="%"
                         hint={getEnrichmentHint("malt", settings.language, result)}
+                        min={0}
+                        max={DOUGH_PERCENT_LIMITS.maltPercent}
                         step={0.1}
                         onChange={(value) => setPartial({ maltPercent: numberValue(value) })}
                       />
@@ -1455,6 +1491,8 @@ export function App() {
                         value={normalizedInput.lardPercent}
                         suffix="%"
                         hint={getEnrichmentHint("lard", settings.language, result)}
+                        min={0}
+                        max={DOUGH_PERCENT_LIMITS.lardPercent}
                         step={0.1}
                         onChange={(value) => setPartial({ lardPercent: numberValue(value) })}
                       />
@@ -1463,6 +1501,8 @@ export function App() {
                         value={normalizedInput.milkPowderPercent}
                         suffix="%"
                         hint={getEnrichmentHint("milk-powder", settings.language, result)}
+                        min={0}
+                        max={DOUGH_PERCENT_LIMITS.milkPowderPercent}
                         step={0.1}
                         onChange={(value) => setPartial({ milkPowderPercent: numberValue(value) })}
                       />
