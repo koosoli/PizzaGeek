@@ -1,6 +1,7 @@
 import { type CalculatorInput, type Flour, getFlourCatalog } from "@pizza-geek/core";
 
 export const CUSTOM_FLOUR_ID = "custom-flour";
+export type FlourRegionFilter = "all" | "US" | "EU";
 
 export function createDefaultCustomFlour(): Flour {
   return {
@@ -61,11 +62,15 @@ export function getSelectableFlours(customFlours: Flour[] = []): Flour[] {
   return getFlourCatalog(customFlours);
 }
 
-export function filterFlours(flours: Flour[], query: string): Flour[] {
+export function filterFlours(flours: Flour[], query: string, region: FlourRegionFilter = "all"): Flour[] {
   const normalized = query.trim().toLowerCase();
-  if (normalized === "") return flours;
+  return flours.filter((flour) => {
+    const matchesRegion = region === "all" || flour.regions.includes(region);
+    if (!matchesRegion) return false;
+    if (normalized === "") return true;
 
-  return flours.filter((flour) =>
-    [flour.brand, flour.name, flour.type, flour.wStrength ?? "", flour.id].some((value) => value.toLowerCase().includes(normalized))
-  );
+    return [flour.brand, flour.name, flour.type, flour.wStrength ?? "", flour.id].some((value) =>
+      value.toLowerCase().includes(normalized)
+    );
+  });
 }
