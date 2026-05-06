@@ -30,29 +30,32 @@ export const DOUGH_PERCENT_LIMITS = {
 
 type QualityScore = Pick<QualitySignal, "score" | "tone">;
 
+const BASE_OUT_OF_RANGE_SCORE = 60;
+const MAX_IN_RANGE_DEDUCTION = 40;
+
 function createQualityScore(score: number): QualityScore {
   const normalizedScore = Math.round(clampTo(score, 0, 100));
   return { score: normalizedScore, tone: toneForScore(normalizedScore) };
 }
 
+function scoreOutsideBoundary(distance: number, boundary: number): QualityScore {
+  const tolerance = Math.max(boundary / 2, 1);
+  const score = BASE_OUT_OF_RANGE_SCORE - clampTo(distance / tolerance, 0, 1) * BASE_OUT_OF_RANGE_SCORE;
+  return createQualityScore(score);
+}
+
 function scoreAgainstRange(value: number, min: number, recommended: number, max: number): QualityScore {
-  if (value < min) {
-    const score = 60 - clampTo(((min - value) / Math.max(min, 1)) * 2, 0, 1) * 60;
-    return createQualityScore(score);
-  }
-  if (value > max) {
-    const score = 60 - clampTo(((value - max) / Math.max(max, 1)) * 2, 0, 1) * 60;
-    return createQualityScore(score);
-  }
+  if (value < min) return scoreOutsideBoundary(min - value, min);
+  if (value > max) return scoreOutsideBoundary(value - max, max);
   const halfRange = value <= recommended ? recommended - min : max - recommended;
   if (halfRange <= 0) return createQualityScore(100);
-  const score = 100 - clampTo(Math.abs(value - recommended) / halfRange, 0, 1) * 40;
+  const score = 100 - clampTo(Math.abs(value - recommended) / halfRange, 0, 1) * MAX_IN_RANGE_DEDUCTION;
   return createQualityScore(score);
 }
 
 function scoreAgainstLimit(value: number, max: number): QualityScore {
   if (value <= max) return createQualityScore(100);
-  const score = 60 - clampTo((value - max) / Math.max(max, 1), 0, 1) * 60;
+  const score = BASE_OUT_OF_RANGE_SCORE - clampTo((value - max) / Math.max(max, 1), 0, 1) * BASE_OUT_OF_RANGE_SCORE;
   return createQualityScore(score);
 }
 
