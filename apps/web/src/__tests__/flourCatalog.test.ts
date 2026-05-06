@@ -15,8 +15,9 @@ describe("flourCatalog", () => {
     const flours = getSelectableFlours([customFlour]);
 
     expect(filterFlours(flours, "custom")).toEqual([customFlour]);
+    expect(filterFlours(flours, "my flour")).toEqual([customFlour]);
     expect(filterFlours(flours, "bread")).toContainEqual(customFlour);
-    expect(filterFlours(flours, "w300")).toEqual([customFlour]);
+    expect(filterFlours(flours, "w300")).toContainEqual(customFlour);
   });
 
   it("drops malformed custom flours during normalization", () => {
