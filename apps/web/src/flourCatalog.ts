@@ -111,6 +111,7 @@ function findEquivalentFlourId(
 
   const source = getFlourById(flourId, customFlours);
   if (!source || matchesRegion(source, region)) return flourId;
+  if (source.regions.length === 1 && source.regions[0] === "GLOBAL") return flourId;
 
   const overrideId = REGION_EQUIVALENT_OVERRIDES[region][flourId];
   if (overrideId) return overrideId;

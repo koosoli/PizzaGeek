@@ -235,6 +235,14 @@ export function defaultSauceOptions(styleId = PIZZA_STYLES[0].id): SauceOptions 
   };
 }
 
+function syncedFlourBlend(blend: CalculatorInput["flourBlend"]) {
+  return {
+    flourBlend: blend,
+    prefermentFlourBlend: blend,
+    mainDoughFlourBlend: blend
+  };
+}
+
 export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInput {
   const style = getStyleById(styleId) ?? PIZZA_STYLES[0];
   const preset = choosePresetForStyle(style.id);
@@ -292,10 +300,10 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
         fridgeHumidityPercent: 45
       },
       flourBlendEnabled: true,
-      flourBlend: [
+      ...syncedFlourBlend([
         { flourId: "caputo-nuvola", percentage: 90 },
         { flourId: "whole-wheat", percentage: 10 }
-      ],
+      ]),
       oven: {
         ...defaultOvenOptions(style.defaultOven),
         pizzaOvenStoneTempF: 800,
@@ -312,10 +320,10 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
       doughBalls: 1,
       ballWeight: 850,
       flourBlendEnabled: true,
-      flourBlend: [
+      ...syncedFlourBlend([
         { flourId: "king-arthur-bread", percentage: 90 },
         { flourId: "whole-wheat", percentage: 10 }
-      ],
+      ]),
       fermentation: {
         roomTempHours: 1,
         cellarTempHours: 0,
@@ -343,7 +351,7 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
       doughBalls: 1,
       ballWeight: 900,
       flourBlendEnabled: true,
-      flourBlend: [{ flourId: "king-arthur-bread", percentage: 100 }],
+      ...syncedFlourBlend([{ flourId: "king-arthur-bread", percentage: 100 }]),
       pan: {
         ...defaultPanOptions(),
         enabled: true,
@@ -378,10 +386,10 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
       doughBalls: 4,
       ballWeight: 280,
       flourBlendEnabled: true,
-      flourBlend: [
+      ...syncedFlourBlend([
         { flourId: "king-arthur-bread", percentage: 85 },
         { flourId: "caputo-manitoba-oro", percentage: 15 }
-      ],
+      ]),
       fermentation: {
         roomTempHours: 1,
         cellarTempHours: 0,
@@ -406,10 +414,10 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
       doughBalls: 1,
       ballWeight: 800,
       flourBlendEnabled: true,
-      flourBlend: [
+      ...syncedFlourBlend([
         { flourId: "king-arthur-bread", percentage: 70 },
         { flourId: "semolina-fine", percentage: 30 }
-      ],
+      ]),
       fermentation: {
         roomTempHours: 1,
         cellarTempHours: 0,
@@ -437,7 +445,7 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
       doughBalls: 1,
       ballWeight: 850,
       flourBlendEnabled: true,
-      flourBlend: [{ flourId: "king-arthur-bread", percentage: 100 }],
+      ...syncedFlourBlend([{ flourId: "king-arthur-bread", percentage: 100 }]),
       pan: {
         ...defaultPanOptions(),
         enabled: true,
@@ -471,10 +479,10 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
       doughBalls: 1,
       ballWeight: 900,
       flourBlendEnabled: true,
-      flourBlend: [
+      ...syncedFlourBlend([
         { flourId: "king-arthur-bread", percentage: 70 },
         { flourId: "whole-wheat", percentage: 30 }
-      ],
+      ]),
       fermentation: {
         roomTempHours: 1,
         cellarTempHours: 0,
@@ -500,10 +508,10 @@ export function createDefaultInput(styleId = PIZZA_STYLES[0].id): CalculatorInpu
       doughBalls: 1,
       ballWeight: 650,
       flourBlendEnabled: true,
-      flourBlend: [
+      ...syncedFlourBlend([
         { flourId: "king-arthur-bread", percentage: 80 },
         { flourId: "caputo-pizzeria", percentage: 20 }
-      ],
+      ]),
       pan: {
         ...defaultPanOptions(),
         enabled: true,

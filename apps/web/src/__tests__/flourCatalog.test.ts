@@ -1,5 +1,6 @@
 import { createDefaultInput, STYLE_IDS } from "@pizza-geek/core";
 import { describe, expect, it } from "vitest";
+import { normalizeCalculatorInput } from "../calculatorInput";
 import {
   createDefaultCustomFlour,
   filterFlours,
@@ -87,7 +88,7 @@ describe("flourCatalog", () => {
 
   it("remaps default recipe blends when a regional flour preference is active", () => {
     const input = createDefaultInput(STYLE_IDS.COUNTRY_LOAF);
-    const remapped = remapInputFloursToRegion(input, "EU");
+    const remapped = normalizeCalculatorInput(remapInputFloursToRegion(input, "EU"));
 
     expect(remapped.flourBlend).toEqual([
       { flourId: "diamant-550", percentage: 90 },

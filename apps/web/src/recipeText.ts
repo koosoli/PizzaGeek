@@ -406,7 +406,7 @@ export function getMethodSteps(
     input,
     locale,
     input.mainDoughFlourBlend,
-    input.preferment.kind === "none" ? ingredients.totalFlour : ingredients.mainFlour
+    input.preferment.kind === "none" ? ingredients.totalFlour : (ingredients.mainFlour ?? 0)
   );
 
   if (input.preferment.kind !== "none") {
