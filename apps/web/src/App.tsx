@@ -1855,7 +1855,13 @@ export function App() {
                               value={item.flourId}
                               onChange={(event) => setBlendItem("mainDoughFlourBlend", index, { flourId: event.target.value })}
                             >
-                              {getVisibleFlours(item.flourId).map((flour) => (
+                              {getVisibleFlours(
+                                availableFlours,
+                                filteredFlourOptions,
+                                item.flourId,
+                                flourFilter,
+                                flourRegionFilter
+                              ).map((flour) => (
                                 <option key={flour.id} value={flour.id}>
                                   {flour.brand} {flour.name}
                                 </option>
