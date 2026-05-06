@@ -37,50 +37,52 @@ describe("getIngredientPercentageNotices", () => {
 });
 
 describe("buildQualitySignals", () => {
-  it("maxes out the salt quality bar in red when salt exceeds the style threshold", () => {
+  it("drops the salt quality bar into the red when salt is far beyond the style threshold", () => {
     const input = createDefaultInput(STYLE_IDS.NEW_YORK);
     input.saltPercent = 5;
 
     const signals = buildQualitySignals(calculateDough(input), input, "F", copy.en);
+    const saltSignal = signals.find((signal) => signal.label === copy.en.saltBalance);
 
-    expect(signals).toContainEqual(
-      expect.objectContaining({
-        label: copy.en.saltBalance,
-        score: 100,
-        tone: "danger"
-      })
-    );
+    expect(saltSignal).toMatchObject({
+      label: copy.en.saltBalance,
+      tone: "danger"
+    });
+    expect(saltSignal?.score).toBeLessThan(45);
   });
 
-  it("adds full-width red alerts for other ingredients that exceed their thresholds", () => {
+  it("shows increasingly risky ingredient bars as percentages move beyond their safe limits", () => {
     const input = createDefaultInput(STYLE_IDS.NEW_YORK);
     input.oilPercent = 10;
     input.honeyPercent = 21;
     input.maltPercent = 6;
 
     const signals = buildQualitySignals(calculateDough(input), input, "F", copy.en);
+    const oilSignal = signals.find((signal) => signal.label === copy.en.oil);
+    const honeySignal = signals.find((signal) => signal.label === copy.en.honey);
+    const maltSignal = signals.find((signal) => signal.label === copy.en.malt);
 
-    expect(signals).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          label: copy.en.oil,
-          value: "10%",
-          score: 100,
-          tone: "danger"
-        }),
-        expect.objectContaining({
-          label: copy.en.honey,
-          value: "21%",
-          score: 100,
-          tone: "danger"
-        }),
-        expect.objectContaining({
-          label: copy.en.malt,
-          value: "6%",
-          score: 100,
-          tone: "danger"
-        })
-      ])
-    );
+    expect(oilSignal).toMatchObject({
+      label: copy.en.oil,
+      value: "10%",
+      tone: "danger"
+    });
+    expect(oilSignal?.score).toBeLessThan(45);
+
+    expect(honeySignal).toMatchObject({
+      label: copy.en.honey,
+      value: "21%",
+      tone: "warning"
+    });
+    expect(honeySignal?.score).toBeGreaterThanOrEqual(45);
+    expect(honeySignal?.score).toBeLessThan(68);
+
+    expect(maltSignal).toMatchObject({
+      label: copy.en.malt,
+      value: "6%",
+      tone: "warning"
+    });
+    expect(maltSignal?.score).toBeGreaterThanOrEqual(45);
+    expect(maltSignal?.score).toBeLessThan(68);
   });
 });
