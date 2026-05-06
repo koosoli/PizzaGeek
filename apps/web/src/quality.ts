@@ -207,24 +207,27 @@ export function getIngredientPercentageNotices(
     { label: labels.milkPowder, value: input.milkPowderPercent, max: DOUGH_PERCENT_LIMITS.milkPowderPercent }
   ];
 
-  return checks.flatMap((check) => {
+  return checks.reduce<DoughSetupNotice[]>((notices, check) => {
     if (check.value < 0) {
-      return [{ tone: "danger", message: formatNegativePercentNotice(check.label, locale) satisfies string }];
+      notices.push({ tone: "danger", message: formatNegativePercentNotice(check.label, locale) });
+      return notices;
     }
 
     if (check.value > check.max) {
-      return [{
+      notices.push({
         tone: "danger",
-        message: formatExtremePercentNotice(check.label, roundPercent(check.value), check.max, locale) satisfies string
-      }];
+        message: formatExtremePercentNotice(check.label, roundPercent(check.value), check.max, locale)
+      });
+      return notices;
     }
 
     if (check.range && (check.value < check.range.min || check.value > check.range.max)) {
-      return [{ tone: "warning", message: formatStyleRangeNotice(check.label, check.range, locale) satisfies string }];
+      notices.push({ tone: "warning", message: formatStyleRangeNotice(check.label, check.range, locale) });
+      return notices;
     }
 
-    return [];
-  });
+    return notices;
+  }, []);
 }
 
 function roundPercent(value: number) {
