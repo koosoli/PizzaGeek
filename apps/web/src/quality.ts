@@ -153,22 +153,24 @@ function getIngredientThresholdSignals(
 
   return checks.reduce<QualitySignal[]>((signals, check) => {
     if (check.value < 0 || check.value > check.max) {
+      const dangerScore = createDangerScore();
       signals.push({
         label: check.label,
         value: `${roundPercent(check.value)}%`,
-        score: 100,
-        tone: "danger",
+        score: dangerScore.score,
+        tone: dangerScore.tone,
         note: `≤ ${check.max}%`
       });
       return signals;
     }
 
     if (check.range && (check.value < check.range.min || check.value > check.range.max)) {
+      const dangerScore = createDangerScore();
       signals.push({
         label: check.label,
         value: `${roundPercent(check.value)}%`,
-        score: 100,
-        tone: "danger",
+        score: dangerScore.score,
+        tone: dangerScore.tone,
         note: `${check.range.min}-${check.range.max}%`
       });
     }
