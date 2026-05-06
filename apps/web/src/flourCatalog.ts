@@ -82,8 +82,8 @@ export function getVisibleFlours(
   query: string,
   region: FlourRegionFilter = "all"
 ): Flour[] {
-  const normalized = query.trim();
-  if (normalized === "" && region === "all") return flours;
+  const normalizedQuery = query.trim();
+  if (normalizedQuery === "" && region === "all") return flours;
 
   if (filteredFlours.some((flour) => flour.id === selectedFlourId)) {
     return filteredFlours;
@@ -92,7 +92,7 @@ export function getVisibleFlours(
   const selectedFlour = flours.find((flour) => flour.id === selectedFlourId);
   const matchesRegion = selectedFlour ? region === "all" || selectedFlour.regions.includes(region) : false;
 
-  return normalized !== "" && selectedFlour && matchesRegion
+  return normalizedQuery !== "" && selectedFlour && matchesRegion
     ? [selectedFlour, ...filteredFlours]
     : filteredFlours;
 }
