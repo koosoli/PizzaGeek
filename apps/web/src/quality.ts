@@ -1,4 +1,4 @@
-import type { CalculatorInput, DoughResult, RangePreset, TemperatureUnit } from "@pizza-geek/core";
+import { getMinimumWForFermentation, type CalculatorInput, type DoughResult, type RangePreset, type TemperatureUnit } from "@pizza-geek/core";
 import type { LocaleCode } from "./appConfig";
 import { clampTo, formatTemperature } from "./appHelpers";
 import type { CopyText } from "./copy";
@@ -99,14 +99,7 @@ export function buildQualitySignals(
     result.style.fermentationHours.recommended,
     result.style.fermentationHours.max
   );
-  const flourScore =
-    result.flourBlend.warningColor === "danger"
-      ? FLOUR_DANGER_SCORE
-      : result.flourBlend.warningColor === "warning"
-        ? FLOUR_WARNING_SCORE
-        : result.flourBlend.warningColor === "notice"
-          ? FLOUR_NOTICE_SCORE
-          : HEALTHY_SIGNAL_SCORE;
+  const flourScore = getFlourQualityScore(result, input);
   const waterScore = result.waterTemperature.warning ? WATER_WARNING_SCORE : HEALTHY_SIGNAL_SCORE;
 
   return [
@@ -147,6 +140,30 @@ export function buildQualitySignals(
       note: result.waterTemperature.warning ?? `Targets ${formatTemperature(result.waterTemperature.targetFdtF, temperatureUnit)}`
     }
   ];
+}
+
+function getFlourQualityScore(result: DoughResult, input: CalculatorInput): number {
+  if (!input.flourBlendEnabled || result.flourBlend.blendedW === null) return HEALTHY_SIGNAL_SCORE;
+
+  const requiredW = getMinimumWForFermentation(
+    input.fermentation.roomTempHours,
+    input.fermentation.coldBulkHours + input.fermentation.coldBallHours,
+    input.hydrationPercent
+  );
+  const gap = requiredW - result.flourBlend.blendedW;
+
+  if (gap <= 0) return HEALTHY_SIGNAL_SCORE;
+  if (gap <= 40) {
+    return Math.round(HEALTHY_SIGNAL_SCORE - (gap / 40) * (HEALTHY_SIGNAL_SCORE - FLOUR_NOTICE_SCORE));
+  }
+  if (gap <= 80) {
+    return Math.round(FLOUR_NOTICE_SCORE - ((gap - 40) / 40) * (FLOUR_NOTICE_SCORE - FLOUR_WARNING_SCORE));
+  }
+  if (gap <= 120) {
+    return Math.round(FLOUR_WARNING_SCORE - ((gap - 80) / 40) * (FLOUR_WARNING_SCORE - FLOUR_DANGER_SCORE));
+  }
+
+  return FLOUR_DANGER_SCORE;
 }
 
 function getIngredientThresholdSignals(

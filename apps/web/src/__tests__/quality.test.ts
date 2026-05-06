@@ -85,4 +85,60 @@ describe("buildQualitySignals", () => {
     expect(maltSignal?.score).toBeGreaterThanOrEqual(45);
     expect(maltSignal?.score).toBeLessThan(68);
   });
+
+  it("makes the flour quality signal more severe as the flour gap grows", () => {
+    const strongerInput = createDefaultInput(STYLE_IDS.NEW_YORK);
+    strongerInput.flourBlendEnabled = true;
+    strongerInput.hydrationPercent = 68;
+    strongerInput.fermentation.roomTempHours = 12;
+    strongerInput.fermentation.coldBulkHours = 24;
+    strongerInput.fermentation.coldBallHours = 0;
+    strongerInput.customFlours = [
+      {
+        id: "custom-strong",
+        brand: "Custom",
+        name: "Strong",
+        type: "bread",
+        proteinPercent: 13,
+        wStrength: "W285",
+        absorptionAdjustment: 0,
+        regions: ["GLOBAL"]
+      },
+      {
+        id: "custom-weaker",
+        brand: "Custom",
+        name: "Weaker",
+        type: "bread",
+        proteinPercent: 13,
+        wStrength: "W255",
+        absorptionAdjustment: 0,
+        regions: ["GLOBAL"]
+      }
+    ];
+    strongerInput.flourBlend = [{ flourId: "custom-strong", percentage: 100 }];
+    strongerInput.prefermentFlourBlend = strongerInput.flourBlend;
+    strongerInput.mainDoughFlourBlend = strongerInput.flourBlend;
+
+    const weakerInput = structuredClone(strongerInput);
+    weakerInput.flourBlend = [{ flourId: "custom-weaker", percentage: 100 }];
+    weakerInput.prefermentFlourBlend = weakerInput.flourBlend;
+    weakerInput.mainDoughFlourBlend = weakerInput.flourBlend;
+
+    const strongerSignal = buildQualitySignals(calculateDough(strongerInput), strongerInput, "F", copy.en).find(
+      (signal) => signal.label === copy.en.flourStrength
+    );
+    const weakerSignal = buildQualitySignals(calculateDough(weakerInput), weakerInput, "F", copy.en).find(
+      (signal) => signal.label === copy.en.flourStrength
+    );
+
+    expect(strongerSignal).toMatchObject({
+      label: copy.en.flourStrength,
+      tone: "ok"
+    });
+    expect(weakerSignal).toMatchObject({
+      label: copy.en.flourStrength,
+      tone: "notice"
+    });
+    expect(strongerSignal?.score).toBeGreaterThan(weakerSignal?.score ?? 0);
+  });
 });
