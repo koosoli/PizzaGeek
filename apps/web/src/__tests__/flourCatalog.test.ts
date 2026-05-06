@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createDefaultCustomFlour, filterFlours, getSelectableFlours, normalizeCustomFlours } from "../flourCatalog";
+import {
+  createDefaultCustomFlour,
+  filterFlours,
+  getSelectableFlours,
+  getVisibleFlours,
+  normalizeCustomFlours
+} from "../flourCatalog";
 
 describe("flourCatalog", () => {
   it("keeps custom flours at the top of the selectable list", () => {
@@ -38,6 +44,23 @@ describe("flourCatalog", () => {
     expect(euOnly).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: "king-arthur-bread" })]));
 
     expect(filterFlours(flours, "caputo", "US").every((flour) => flour.regions.includes("US"))).toBe(true);
+  });
+
+  it("limits visible dropdown flours to the active region filter", () => {
+    const flours = getSelectableFlours();
+    const usOnly = filterFlours(flours, "", "US");
+
+    expect(getVisibleFlours(flours, usOnly, "manitoba", "", "US")).toEqual(usOnly);
+  });
+
+  it("keeps the selected flour visible only when a search is active and the region still matches", () => {
+    const flours = getSelectableFlours();
+    const searchResults = filterFlours(flours, "king", "US");
+    const visibleFlours = getVisibleFlours(flours, searchResults, "caputo-pizzeria", "king", "US");
+
+    expect(visibleFlours[0]).toEqual(expect.objectContaining({ id: "caputo-pizzeria" }));
+    expect(visibleFlours.slice(1)).toEqual(searchResults);
+    expect(getVisibleFlours(flours, searchResults, "manitoba", "king", "US")).toEqual(searchResults);
   });
 
   it("drops malformed custom flours during normalization", () => {

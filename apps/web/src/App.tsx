@@ -97,7 +97,14 @@ import { getSauceStyleLabel, getSauceUiCopy, localizeSauceOption, localizeSauceS
 import { buildQualitySignals, getHydrationWorkabilityNotice, type QualitySignal } from "./quality";
 import { applySinglePrefermentPatch, inferSauceStyleFromOption, normalizeCalculatorInput } from "./calculatorInput";
 import { formatBakeWindow, getEnrichmentHint, getMethodSteps, getOvenDetailText, getWaterSummaryText, localizePlanStep, localizeWaterMessage } from "./recipeText";
-import { createDefaultCustomFlour, CUSTOM_FLOUR_ID, filterFlours, getSelectableFlours, type FlourRegionFilter } from "./flourCatalog";
+import {
+  createDefaultCustomFlour,
+  CUSTOM_FLOUR_ID,
+  filterFlours,
+  getSelectableFlours,
+  getVisibleFlours,
+  type FlourRegionFilter
+} from "./flourCatalog";
 
 type BlendTarget = "prefermentFlourBlend" | "mainDoughFlourBlend";
 
@@ -962,17 +969,6 @@ export function App() {
     });
   };
 
-  const getVisibleFlours = (selectedFlourId: string) => {
-    if (flourFilter.trim() === "") return availableFlours;
-
-    if (filteredFlourOptions.some((flour) => flour.id === selectedFlourId)) {
-      return filteredFlourOptions;
-    }
-
-    const selectedFlour = availableFlours.find((flour) => flour.id === selectedFlourId);
-    return selectedFlour ? [selectedFlour, ...filteredFlourOptions] : filteredFlourOptions;
-  };
-
   const setCustomFlour = (patch: Partial<Flour>) => {
     setInput((current) => {
       const normalized = normalizeCalculatorInput(current);
@@ -1799,7 +1795,13 @@ export function App() {
                                   value={item.flourId}
                                   onChange={(event) => setBlendItem("prefermentFlourBlend", index, { flourId: event.target.value })}
                                 >
-                                  {getVisibleFlours(item.flourId).map((flour) => (
+                                  {getVisibleFlours(
+                                    availableFlours,
+                                    filteredFlourOptions,
+                                    item.flourId,
+                                    flourFilter,
+                                    flourRegionFilter
+                                  ).map((flour) => (
                                     <option key={flour.id} value={flour.id}>
                                       {flour.brand} {flour.name}
                                     </option>
