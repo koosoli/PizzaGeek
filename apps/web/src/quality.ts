@@ -28,11 +28,18 @@ export const DOUGH_PERCENT_LIMITS = {
   milkPowderPercent: 10
 } as const;
 
-function scoreAgainstRange(value: number, min: number, recommended: number, max: number) {
-  if (value < min || value > max) return 34;
+type QualityScore = Pick<QualitySignal, "score" | "tone">;
+
+function createDangerScore(): QualityScore {
+  return { score: 100, tone: "danger" };
+}
+
+function scoreAgainstRange(value: number, min: number, recommended: number, max: number): QualityScore {
+  if (value < min || value > max) return createDangerScore();
   const halfRange = value <= recommended ? recommended - min : max - recommended;
-  if (halfRange <= 0) return 100;
-  return Math.round(100 - clampTo(Math.abs(value - recommended) / halfRange, 0, 1) * 22);
+  if (halfRange <= 0) return { score: 100, tone: "ok" };
+  const score = Math.round(100 - clampTo(Math.abs(value - recommended) / halfRange, 0, 1) * 22);
+  return { score, tone: toneForScore(score) };
 }
 
 function toneForScore(score: number): QualitySignal["tone"] {
@@ -48,18 +55,19 @@ export function buildQualitySignals(
   temperatureUnit: TemperatureUnit,
   labels: CopyText
 ): QualitySignal[] {
-  const hydrationScore = scoreAgainstRange(
+  const hydrationSignal = scoreAgainstRange(
     input.hydrationPercent,
     result.style.hydration.min,
     result.style.hydration.recommended,
     result.style.hydration.max
   );
-  const saltScore = scoreAgainstRange(
+  const saltSignal = scoreAgainstRange(
     input.saltPercent,
     result.style.salt.min,
     result.style.salt.recommended,
     result.style.salt.max
   );
+  const ingredientAlertSignals = getIngredientThresholdSignals(input, result, labels);
   const fermentDelta = Math.abs(result.totalFermentationHours - result.style.fermentationHours.recommended);
   const fermentScore =
     result.totalFermentationHours < result.style.fermentationHours.min ||
@@ -88,17 +96,18 @@ export function buildQualitySignals(
     {
       label: labels.hydrationFit,
       value: `${input.hydrationPercent}%`,
-      score: hydrationScore,
-      tone: toneForScore(hydrationScore),
+      score: hydrationSignal.score,
+      tone: hydrationSignal.tone,
       note: `${result.style.hydration.min}-${result.style.hydration.max}%`
     },
     {
       label: labels.saltBalance,
       value: `${input.saltPercent}%`,
-      score: saltScore,
-      tone: toneForScore(saltScore),
+      score: saltSignal.score,
+      tone: saltSignal.tone,
       note: `${result.style.salt.recommended}%`
     },
+    ...ingredientAlertSignals,
     {
       label: labels.fermentPlan,
       value: `${result.totalFermentationHours}h`,
@@ -121,6 +130,48 @@ export function buildQualitySignals(
       note: result.waterTemperature.warning ?? `Targets ${formatTemperature(result.waterTemperature.targetFdtF, temperatureUnit)}`
     }
   ];
+}
+
+function getIngredientThresholdSignals(
+  input: CalculatorInput,
+  result: DoughResult,
+  labels: Pick<CopyText, "oil" | "sugar" | "honey" | "malt" | "lard" | "milkPowder">
+): QualitySignal[] {
+  const checks: Array<{
+    label: string;
+    value: number;
+    max: number;
+    range?: RangePreset;
+  }> = [
+    { label: labels.oil, value: input.oilPercent, max: DOUGH_PERCENT_LIMITS.oilPercent, range: result.style.oil },
+    { label: labels.sugar, value: input.sugarPercent, max: DOUGH_PERCENT_LIMITS.sugarPercent, range: result.style.sugar },
+    { label: labels.honey, value: input.honeyPercent, max: DOUGH_PERCENT_LIMITS.honeyPercent },
+    { label: labels.malt, value: input.maltPercent, max: DOUGH_PERCENT_LIMITS.maltPercent },
+    { label: labels.lard, value: input.lardPercent, max: DOUGH_PERCENT_LIMITS.lardPercent },
+    { label: labels.milkPowder, value: input.milkPowderPercent, max: DOUGH_PERCENT_LIMITS.milkPowderPercent }
+  ];
+
+  return checks.reduce<QualitySignal[]>((signals, check) => {
+    if (check.value > check.max) {
+      signals.push(buildIngredientThresholdSignal(check.label, check.value, `≤ ${check.max}%`));
+      return signals;
+    }
+
+    if (check.range && (check.value < check.range.min || check.value > check.range.max)) {
+      signals.push(buildIngredientThresholdSignal(check.label, check.value, `${check.range.min}-${check.range.max}%`));
+    }
+
+    return signals;
+  }, []);
+}
+
+function buildIngredientThresholdSignal(label: string, value: number, note: string): QualitySignal {
+  return {
+    label,
+    value: `${roundPercent(value)}%`,
+    ...createDangerScore(),
+    note
+  };
 }
 
 export function getHydrationWorkabilityNotice(
