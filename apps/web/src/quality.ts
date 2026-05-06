@@ -30,16 +30,41 @@ export const DOUGH_PERCENT_LIMITS = {
 
 type QualityScore = Pick<QualitySignal, "score" | "tone">;
 
-function createDangerScore(): QualityScore {
-  return { score: 100, tone: "danger" };
+const BASE_OUT_OF_RANGE_SCORE = 60;
+const MAX_IN_RANGE_DEDUCTION = 40;
+const HEALTHY_SIGNAL_SCORE = 94;
+const FLOUR_DANGER_SCORE = 24;
+const FLOUR_WARNING_SCORE = 55;
+const FLOUR_NOTICE_SCORE = 75;
+const WATER_WARNING_SCORE = 55;
+
+function createQualityScore(score: number): QualityScore {
+  const normalizedScore = Math.round(clampTo(score, 0, 100));
+  return { score: normalizedScore, tone: toneForScore(normalizedScore) };
+}
+
+function scorePenalty(baseScore: number, distance: number, penaltyRange: number) {
+  const penalty = clampTo(distance / penaltyRange, 0, 1) * baseScore;
+  return baseScore - penalty;
+}
+
+function scoreOutsideBoundary(distance: number, boundary: number): QualityScore {
+  const penaltyRange = Math.max(boundary / 2, 1);
+  return createQualityScore(scorePenalty(BASE_OUT_OF_RANGE_SCORE, distance, penaltyRange));
 }
 
 function scoreAgainstRange(value: number, min: number, recommended: number, max: number): QualityScore {
-  if (value < min || value > max) return createDangerScore();
+  if (value < min) return scoreOutsideBoundary(min - value, min);
+  if (value > max) return scoreOutsideBoundary(value - max, max);
   const halfRange = value <= recommended ? recommended - min : max - recommended;
-  if (halfRange <= 0) return { score: 100, tone: "ok" };
-  const score = Math.round(100 - clampTo(Math.abs(value - recommended) / halfRange, 0, 1) * 22);
-  return { score, tone: toneForScore(score) };
+  if (halfRange <= 0) return createQualityScore(100);
+  const score = 100 - clampTo(Math.abs(value - recommended) / halfRange, 0, 1) * MAX_IN_RANGE_DEDUCTION;
+  return createQualityScore(score);
+}
+
+function scoreAgainstLimit(value: number, max: number): QualityScore {
+  if (value <= max) return createQualityScore(100);
+  return createQualityScore(scorePenalty(BASE_OUT_OF_RANGE_SCORE, value - max, Math.max(max, 1)));
 }
 
 function toneForScore(score: number): QualitySignal["tone"] {
@@ -68,29 +93,21 @@ export function buildQualitySignals(
     result.style.salt.max
   );
   const ingredientAlertSignals = getIngredientThresholdSignals(input, result, labels);
-  const fermentDelta = Math.abs(result.totalFermentationHours - result.style.fermentationHours.recommended);
-  const fermentScore =
-    result.totalFermentationHours < result.style.fermentationHours.min ||
-    result.totalFermentationHours > result.style.fermentationHours.max
-      ? 50
-      : Math.round(
-          100 -
-            clampTo(
-              fermentDelta / Math.max(1, result.style.fermentationHours.max - result.style.fermentationHours.min),
-              0,
-              1
-            ) *
-              26
-        );
+  const fermentSignal = scoreAgainstRange(
+    result.totalFermentationHours,
+    result.style.fermentationHours.min,
+    result.style.fermentationHours.recommended,
+    result.style.fermentationHours.max
+  );
   const flourScore =
     result.flourBlend.warningColor === "danger"
-      ? 35
+      ? FLOUR_DANGER_SCORE
       : result.flourBlend.warningColor === "warning"
-        ? 55
+        ? FLOUR_WARNING_SCORE
         : result.flourBlend.warningColor === "notice"
-          ? 75
-          : 94;
-  const waterScore = result.waterTemperature.warning ? 64 : 94;
+          ? FLOUR_NOTICE_SCORE
+          : HEALTHY_SIGNAL_SCORE;
+  const waterScore = result.waterTemperature.warning ? WATER_WARNING_SCORE : HEALTHY_SIGNAL_SCORE;
 
   return [
     {
@@ -111,8 +128,8 @@ export function buildQualitySignals(
     {
       label: labels.fermentPlan,
       value: `${result.totalFermentationHours}h`,
-      score: fermentScore,
-      tone: toneForScore(fermentScore),
+      score: fermentSignal.score,
+      tone: fermentSignal.tone,
       note: `${result.effectiveFermentationHours}h adjusted`
     },
     {
@@ -153,23 +170,30 @@ function getIngredientThresholdSignals(
 
   return checks.reduce<QualitySignal[]>((signals, check) => {
     if (check.value > check.max) {
-      signals.push(buildIngredientThresholdSignal(check.label, check.value, `≤ ${check.max}%`));
+      signals.push(buildIngredientThresholdSignal(check.label, check.value, `≤ ${check.max}%`, scoreAgainstLimit(check.value, check.max)));
       return signals;
     }
 
     if (check.range && (check.value < check.range.min || check.value > check.range.max)) {
-      signals.push(buildIngredientThresholdSignal(check.label, check.value, `${check.range.min}-${check.range.max}%`));
+      signals.push(
+        buildIngredientThresholdSignal(
+          check.label,
+          check.value,
+          `${check.range.min}-${check.range.max}%`,
+          scoreAgainstRange(check.value, check.range.min, check.range.recommended, check.range.max)
+        )
+      );
     }
 
     return signals;
   }, []);
 }
 
-function buildIngredientThresholdSignal(label: string, value: number, note: string): QualitySignal {
+function buildIngredientThresholdSignal(label: string, value: number, note: string, qualityScore: QualityScore): QualitySignal {
   return {
     label,
     value: `${roundPercent(value)}%`,
-    ...createDangerScore(),
+    ...qualityScore,
     note
   };
 }
