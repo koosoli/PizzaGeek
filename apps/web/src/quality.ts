@@ -37,13 +37,11 @@ function createQualityScore(score: number): QualityScore {
 
 function scoreAgainstRange(value: number, min: number, recommended: number, max: number): QualityScore {
   if (value < min) {
-    const driftRange = Math.max(recommended - min, 1);
-    const score = 60 - clampTo((min - value) / driftRange, 0, 1) * 60;
+    const score = 60 - clampTo(((min - value) / Math.max(min, 1)) * 2, 0, 1) * 60;
     return createQualityScore(score);
   }
   if (value > max) {
-    const driftRange = Math.max(max - recommended, 1);
-    const score = 60 - clampTo((value - max) / driftRange, 0, 1) * 60;
+    const score = 60 - clampTo(((value - max) / Math.max(max, 1)) * 2, 0, 1) * 60;
     return createQualityScore(score);
   }
   const halfRange = value <= recommended ? recommended - min : max - recommended;
