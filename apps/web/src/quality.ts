@@ -152,31 +152,26 @@ function getIngredientThresholdSignals(
   ];
 
   return checks.reduce<QualitySignal[]>((signals, check) => {
-    if (check.value < 0 || check.value > check.max) {
-      const dangerScore = createDangerScore();
-      signals.push({
-        label: check.label,
-        value: `${roundPercent(check.value)}%`,
-        score: dangerScore.score,
-        tone: dangerScore.tone,
-        note: `≤ ${check.max}%`
-      });
+    if (check.value > check.max) {
+      signals.push(buildIngredientThresholdSignal(check.label, check.value, `≤ ${check.max}%`));
       return signals;
     }
 
     if (check.range && (check.value < check.range.min || check.value > check.range.max)) {
-      const dangerScore = createDangerScore();
-      signals.push({
-        label: check.label,
-        value: `${roundPercent(check.value)}%`,
-        score: dangerScore.score,
-        tone: dangerScore.tone,
-        note: `${check.range.min}-${check.range.max}%`
-      });
+      signals.push(buildIngredientThresholdSignal(check.label, check.value, `${check.range.min}-${check.range.max}%`));
     }
 
     return signals;
   }, []);
+}
+
+function buildIngredientThresholdSignal(label: string, value: number, note: string): QualitySignal {
+  return {
+    label,
+    value: `${roundPercent(value)}%`,
+    ...createDangerScore(),
+    note
+  };
 }
 
 export function getHydrationWorkabilityNotice(
