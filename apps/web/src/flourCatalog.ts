@@ -74,3 +74,25 @@ export function filterFlours(flours: Flour[], query: string, region: FlourRegion
     );
   });
 }
+
+export function getVisibleFlours(
+  flours: Flour[],
+  filteredFlours: Flour[],
+  selectedFlourId: string,
+  query: string,
+  region: FlourRegionFilter = "all"
+): Flour[] {
+  const normalizedQuery = query.trim();
+  if (normalizedQuery === "" && region === "all") return flours;
+
+  if (filteredFlours.some((flour) => flour.id === selectedFlourId)) {
+    return filteredFlours;
+  }
+
+  const selectedFlour = flours.find((flour) => flour.id === selectedFlourId);
+  const matchesRegion = selectedFlour ? region === "all" || selectedFlour.regions.includes(region) : false;
+
+  return normalizedQuery !== "" && selectedFlour && matchesRegion
+    ? [selectedFlour, ...filteredFlours]
+    : filteredFlours;
+}
