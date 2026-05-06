@@ -43,10 +43,14 @@ function createQualityScore(score: number): QualityScore {
   return { score: normalizedScore, tone: toneForScore(normalizedScore) };
 }
 
+function scorePenalty(baseScore: number, distance: number, penaltyRange: number) {
+  const penalty = clampTo(distance / penaltyRange, 0, 1) * baseScore;
+  return baseScore - penalty;
+}
+
 function scoreOutsideBoundary(distance: number, boundary: number): QualityScore {
-  const tolerance = Math.max(boundary / 2, 1);
-  const score = BASE_OUT_OF_RANGE_SCORE - clampTo(distance / tolerance, 0, 1) * BASE_OUT_OF_RANGE_SCORE;
-  return createQualityScore(score);
+  const penaltyRange = Math.max(boundary / 2, 1);
+  return createQualityScore(scorePenalty(BASE_OUT_OF_RANGE_SCORE, distance, penaltyRange));
 }
 
 function scoreAgainstRange(value: number, min: number, recommended: number, max: number): QualityScore {
@@ -60,8 +64,7 @@ function scoreAgainstRange(value: number, min: number, recommended: number, max:
 
 function scoreAgainstLimit(value: number, max: number): QualityScore {
   if (value <= max) return createQualityScore(100);
-  const score = BASE_OUT_OF_RANGE_SCORE - clampTo((value - max) / Math.max(max, 1), 0, 1) * BASE_OUT_OF_RANGE_SCORE;
-  return createQualityScore(score);
+  return createQualityScore(scorePenalty(BASE_OUT_OF_RANGE_SCORE, value - max, Math.max(max, 1)));
 }
 
 function toneForScore(score: number): QualitySignal["tone"] {
